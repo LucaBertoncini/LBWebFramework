@@ -1,0 +1,450 @@
+/*
+  ============================================================
+  LBTreeView — Variabili di tema
+  ============================================================
+  I default sono definiti su .LBTreeView e si applicano a
+  tutte le istanze del componente. Per sovrascriverli:
+
+  — Tema globale applicazione (nel proprio CSS, caricato dopo):
+      .LBTreeView {
+        --lbtv-caret-color: #aaa;
+      }
+
+  — Tema per area specifica:
+      #contenitore .LBTreeView {
+        --lbtv-caret-color: #aaa;
+      }
+
+  — Tema per singola istanza:
+      #mio-pannello .LBTreeView {
+        --lbtv-caret-color: #ffcc00;
+      }
+  ============================================================
+
+  AGGIORNAMENTO (OPT-IN): testo lungo che va a capo mantenendo
+  freccia/checkbox/testo allineati, invece di lasciare la freccia
+  isolata su una riga a se'
+  ----------------------------------------------------------------------
+  QUESTO COMPONENTE E' CONDIVISO (usato anche da altre applicazioni, es.
+  DMA, mai verificate in questa sede): per non rischiare di interferire
+  con un eventuale override CSS gia' esistente altrove (es. un selettore
+  diretto ".LBTVCaret::before", che smetterebbe di avere effetto se il
+  glifo della freccia venisse spostato incondizionatamente), TUTTE le
+  nuove regole introdotte per questo aggiornamento sono qualificate col
+  prefisso ".LBTVWrapLabels " - una classe modificatore aggiunta SOLO sul
+  contenitore radice (<ul class="LBTreeView LBTVWrapLabels">) quando
+  TLBjsTreeView.WrapLongLabels e' impostata esplicitamente a True dal
+  chiamante (vedi uLBTreeView.pas, renderWrapper) - il DEFAULT di quella
+  proprieta' e' False, quindi QUALUNQUE istanza esistente che non la
+  imposti (incluso ogni consumatore attuale di questa unit) continua a
+  produrre l'HTML di sempre, SENZA la classe "LBTVWrapLabels": tutte le
+  regole sotto restano percio' completamente INATTIVE per loro, e le
+  regole ORIGINALI (.LBTVCheckbox con white-space: nowrap,
+  .LBTVCaret::before non qualificato) restano ESATTAMENTE come prima -
+  NON sono state modificate ne' rimosse, solo AFFIANCATE da varianti piu'
+  specifiche che si attivano unicamente sotto ".LBTVWrapLabels".
+
+  CAUSA VERA del problema originale (per chi attiva l'opt-in):
+  .LBTVCheckbox conteneva INSIEME il glifo della checkbox (::before) e il
+  testo del nodo, con "white-space: nowrap" - un elemento con nowrap non
+  puo' MAI spezzare il proprio testo: se l'intero blocco non entra nella
+  riga, l'unica cosa possibile e' spostare l'intero blocco (inline-block,
+  indivisibile) alla riga successiva, lasciando la freccia (un ::before
+  sull'elemento PADRE) isolata sulla riga precedente.
+
+  RISOLUZIONE (in coppia con uLBTreeView.pas, insertArray - vedi quel
+  file per la spiegazione HTML/struttura completa): quando l'opt-in e'
+  attivo, due nuovi elementi generati - .LBTVRow (contenitore,
+  display:flex) e .LBTVLabel (l'elemento che si restringe e va a capo,
+  flex:1 1 auto; min-width:0) - avvolgono ESCLUSIVAMENTE checkbox-o-testo,
+  MAI il sottoalbero annidato (<ul class="LBTVNested">), che resta un
+  fratello SUCCESSIVO di .LBTVRow.
+
+  BUGFIX (freccia duplicata, gia' corretto in precedenza): la regola BASE
+  ".LBTVCaret::before" continuava a disegnare la propria freccia sullo
+  span ESTERNO anche sotto l'opt-in, in aggiunta a quella nuova sul
+  wrapper .LBTVRow interno - risolto con una regola di soppressione
+  (".LBTVWrapLabels .LBTVCaret::before { display: none; }") che nasconde
+  SOLO sotto l'opt-in la freccia originale, senza toccare la regola base.
+
+  BUGFIX (QUESTO AGGIORNAMENTO): freccia/checkbox/testo non allineati
+  verticalmente al centro
+  ----------------------------------------------------------------------
+  CAUSA: ".LBTVWrapLabels .LBTVRow" usava "align-items: flex-start" -
+  che allinea gli elementi flessibili al BORDO SUPERIORE della riga, non
+  al centro. Con elementi di altezza diversa all'interno della stessa
+  riga (il glifo ::before della freccia/checkbox ha un font-size diverso
+  da quello del testo dell'etichetta, ed entrambi hanno un padding
+  proprio non identico - vedi .LBTVCaret/.LBTVCheckbox, padding:
+  10px 4px), il risultato erano freccia/checkbox visibilmente piu' in
+  alto rispetto al testo, invece di allineati al centro come richiesto
+  esplicitamente. RISOLTO: "align-items: flex-start" sostituito con
+  "align-items: center" - unica modifica di questo aggiornamento, tutto
+  il resto del file e' invariato rispetto alla consegna precedente.
+  ============================================================
+*/
+
+/* ============================================================
+   Struttura base + variabili di tema (default del componente)
+   ============================================================ */
+
+.LBTreeView {
+  list-style-type: none !important;
+  font-size: 1rem !important;
+  margin: 0;
+  padding: 0;
+
+  /* Caret */
+  --lbtv-caret-color:              #666;
+  --lbtv-caret-hover-color:        #FF0000;
+  --lbtv-caret-open-color:         #fff;
+  --lbtv-caret-size:               1rem;
+  --lbtv-caret-spacing:            6px;
+  --lbtv-caret-placeholder-width:  18px;
+
+  /* Checkbox */
+  --lbtv-checkbox-color:           #666;
+  --lbtv-checkbox-checked-color:   #00cc66;
+  --lbtv-checkbox-size:            1.4rem;
+  --lbtv-checkbox-spacing:         6px;
+
+  /* Bordo nested */
+  --lbtv-nested-border-color:      #666;
+
+  /* Hover e active sugli <li> — primo livello */
+  --lbtv-li-hover-color:           var(--li-hover-color);
+  --lbtv-li-active-color:          var(--li-hover-color);
+
+  /* Hover e active sugli <li> — secondo livello */
+  --lbtv-li-li-hover-color:        var(--li-li-hover-color);
+  --lbtv-li-li-active-color:       var(--li-li-hover-color);
+
+  /* Context menu */
+  --lbtv-menu-bg:                  #ffffff;
+  --lbtv-menu-border:              #ccc;
+  --lbtv-menu-item-color:          #000000;
+  --lbtv-menu-item-hover-bg:       #0078d7;
+  --lbtv-menu-item-hover-color:    #ffffff;
+  --lbtv-menu-item-active-bg:      #005a9e;
+  --lbtv-menu-item-active-color:   #ffffff;
+}
+
+/* ============================================================
+   Checkbox
+   ============================================================ */
+
+.LBTVCheckbox {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  display: inline-block;
+  padding: 10px 4px;
+}
+
+.LBTVCheckbox::before {
+  content: "\2610"; /* ☐ */
+  color: var(--lbtv-checkbox-color);
+  display: inline-block;
+  margin-right: var(--lbtv-checkbox-spacing);
+  font-size: var(--lbtv-checkbox-size);
+  vertical-align: middle;
+}
+
+.LBTVCheckbox-Checked::before {
+  content: "\2611"; /* ☑ */
+  color: var(--lbtv-checkbox-checked-color);
+}
+
+/* ============================================================
+   Spaziatura tra fratelli
+   ============================================================ */
+
+.LBTreeView > li,
+.LBTreeView ul > li {
+  margin-top: 8px;
+  padding: 4px 0;
+}
+
+/* ============================================================
+   Nested list
+   ============================================================ */
+
+.LBTVNested {
+  display: none;
+  margin-left: 1.25em;
+  border-left: 1px solid var(--lbtv-nested-border-color);
+  padding-left: 0.625em;
+  font-weight: normal;
+}
+
+.LBTVActive {
+  display: block;
+}
+
+/* ============================================================
+   Caret
+   ============================================================ */
+
+.LBTVCaret {
+  cursor: pointer;
+  user-select: none;
+  padding: 10px 4px;
+}
+
+/* freccia chiusa */
+.LBTVCaret::before {
+  content: "▶";
+  color: var(--lbtv-caret-color);
+  font-weight: bold;
+  display: inline-block;
+  margin-right: var(--lbtv-caret-spacing);
+  font-size: var(--lbtv-caret-size);
+  transition: transform 0.2s ease;
+}
+
+/* freccia chiusa hover — solo su dispositivi che supportano hover */
+@media (hover: hover) {
+  .LBTVCaret:hover::before {
+    color: var(--lbtv-caret-hover-color);
+  }
+}
+
+/* freccia aperta */
+.LBTVCaret-Down::before {
+  content: "▼";
+  color: var(--lbtv-caret-open-color);
+}
+
+/* Empty caret (spazio placeholder) */
+.LBTVEmptyCaret {
+  user-select: none;
+  display: inline-block;
+  width: var(--lbtv-caret-placeholder-width);
+  margin-right: 8px;
+}
+
+/* ============================================================
+   <li> — hover e active
+   ============================================================ */
+
+/* Aspetto primo livello e secondo livello: Il colore di background prende il contenitore
+.LBTreeView li {
+  background-color:
+  border-radius: 4px;
+} */
+
+.LBTreeView li li {
+  font-size: 14px !important;
+  font-weight: normal;
+  /* background-color: */
+}
+
+/* Hover — solo su dispositivi che supportano hover */
+@media (hover: hover) {
+  .LBTreeView li:hover {
+    background-color: var(--lbtv-li-hover-color);
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+  }
+
+  .LBTreeView li li:hover {
+    background-color: var(--lbtv-li-li-hover-color);
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+  }
+}
+
+/* Feedback visivo al tocco su dispositivi touch */
+.LBTreeView li:active {
+  background-color: var(--lbtv-li-active-color);
+  border-radius: 4px;
+}
+
+.LBTreeView li li:active {
+  background-color: var(--lbtv-li-li-active-color);
+  border-radius: 4px;
+}
+
+/* ============================================================
+   Context Menu
+   ============================================================ */
+
+.LBTVContextMenu {
+  background-color: var(--lbtv-menu-bg);
+  border: 1px solid var(--lbtv-menu-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  min-width: 150px;
+  padding: 4px 0;
+}
+
+.LBTVContextMenuItem {
+  padding: 12px 16px;
+  color: var(--lbtv-menu-item-color) !important;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.LBTVContextMenuItem:hover {
+  background-color: var(--lbtv-menu-item-hover-bg);
+  color: var(--lbtv-menu-item-hover-color);
+}
+
+.LBTVContextMenuItem:active {
+  background-color: var(--lbtv-menu-item-active-bg);
+  color: var(--lbtv-menu-item-active-color);
+}
+
+/* OPT-IN (TLBTreeViewMenuItem.IconClass / Group / Danger): le classi seguenti compaiono SOLO se l'applicazione
+   imposta quelle proprieta'; senza, il menu e' quello di sempre. L'icona la disegna il CSS dell'applicazione
+   (classi in IconClass): qui solo spazio e allineamento. */
+.LBTVContextMenu-Icons .LBTVContextMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.LBTVContextMenuIcon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+.LBTVContextMenuItem-Sep {
+  border-top: 1px solid var(--lbtv-menu-border);
+  margin-top: 4px;
+}
+
+.LBTVContextMenuItem-Danger {
+  color: #c0392b !important;
+}
+
+/* ============================================================
+   AGGIORNAMENTO (OPT-IN): tutte le regole seguenti sono attive SOLO
+   dentro un contenitore con classe "LBTVWrapLabels" - vedi il commento
+   esteso in testa al file per il motivo della scelta opt-in e per la
+   spiegazione completa. Nessuna di queste regole ha alcun effetto su
+   un'istanza che non imposti TLBjsTreeView.WrapLongLabels := True.
+   ============================================================ */
+
+/* Riga flessibile (freccia + checkbox/testo), generata SOLO quando
+   l'opt-in e' attivo - vedi uLBTreeView.pas, insertArray.
+   BUGFIX (questo aggiornamento): "align-items: center" (era
+   "flex-start") - vedi la nota estesa in testa al file. */
+.LBTVWrapLabels .LBTVRow {
+  display: flex;
+  align-items: center;
+}
+
+.LBTVWrapLabels .LBTVLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+/* BUGFIX (solo sotto l'opt-in): il testo DEVE poter andare a capo -
+   sovrascrive puntualmente il nowrap della regola base sopra, ma SOLO
+   dentro ".LBTVWrapLabels", lasciando invariato il comportamento per
+   qualunque altro consumatore di questa unit. */
+.LBTVWrapLabels .LBTVCheckbox {
+  white-space: normal;
+}
+
+/* BUGFIX (freccia duplicata - riscontrato in produzione dopo la prima
+   consegna di questo opt-in): la regola BASE ".LBTVCaret::before" (sopra,
+   MAI modificata per la retro-compatibilita') non ha alcuna condizione
+   che la disattivi quando l'opt-in e' in uso - continuava quindi a
+   disegnare la propria freccia sullo <span class="LBTVCaret"> ESTERNO,
+   ESATTAMENTE COME PRIMA, mentre la nuova regola sotto ne disegnava
+   un'altra sul nuovo <span class="LBTVRow"> INTERNO - risultando in due
+   frecce impilate per lo stesso nodo. Questa regola sopprime (SOLO sotto
+   ".LBTVWrapLabels") il rendering della freccia sullo span ESTERNO,
+   senza toccare la regola base: specificita' (due classi) piu' alta sia
+   della regola base sia di ".LBTVCaret-Down::before" (una classe
+   ciascuna), quindi sopprime la freccia originale in ENTRAMBI gli stati
+   aperto/chiuso. Nessun conflitto con la regola :hover della freccia
+   originale: agisce su una proprieta' diversa (display, non color) - un
+   elemento con display:none nasconde comunque qualunque colore le venga
+   assegnato altrove. */
+.LBTVWrapLabels .LBTVCaret::before {
+  display: none;
+}
+
+/* Il glifo della freccia si sposta sul nuovo wrapper .LBTVRow (figlio
+   diretto di .LBTVCaret) SOLO sotto l'opt-in - la regola base
+   ".LBTVCaret::before" (sopra) resta invariata NEL TESTO e continua a
+   valere per qualunque consumatore che non attivi WrapLongLabels; sotto
+   l'opt-in il suo EFFETTO VISIVO viene soppresso dalla regola immediatamente
+   precedente, non dalla regola stessa. */
+.LBTVWrapLabels .LBTVCaret > .LBTVRow::before {
+  content: "▶";
+  color: var(--lbtv-caret-color);
+  font-weight: bold;
+  display: inline-block;
+  margin-right: var(--lbtv-caret-spacing);
+  font-size: var(--lbtv-caret-size);
+  transition: transform 0.2s ease;
+}
+
+@media (hover: hover) {
+  .LBTVWrapLabels .LBTVCaret:hover > .LBTVRow::before {
+    color: var(--lbtv-caret-hover-color);
+  }
+}
+
+.LBTVWrapLabels .LBTVCaret-Down > .LBTVRow::before {
+  content: "▼";
+  color: var(--lbtv-caret-open-color);
+}
+
+/* ============================================================
+   OPT-IN: freccia CHEVRON che ruota (TLBjsTreeView.ChevronCaret)
+   ------------------------------------------------------------
+   Attive SOLO dentro il contenitore radice con classe
+   "LBTVChevron" (aggiunta da renderWrapper quando ChevronCaret e'
+   True): nessun effetto sulle istanze che non la attivano.
+   La freccia e' un'icona SVG usata come maschera: prende il colore
+   dalle variabili di sempre (--lbtv-caret-color, -hover-, -open-) e
+   la dimensione da --lbtv-caret-size. Aperta = ruotata di 90 gradi.
+   Le foglie hanno uno spazio della stessa larghezza (testi allineati).
+   ============================================================ */
+.LBTVChevron {
+  --lbtv-chevron-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E");
+}
+
+/* senza WrapLongLabels: la freccia e' sullo span del nodo */
+.LBTVChevron:not(.LBTVWrapLabels) .LBTVCaret::before,
+/* con WrapLongLabels: la freccia e' sulla riga interna .LBTVRow */
+.LBTVChevron.LBTVWrapLabels .LBTVCaret > .LBTVRow::before,
+.LBTVChevron.LBTVWrapLabels .LBTVEmptyCaret > .LBTVRow::before {
+  content: "";
+  display: inline-block;
+  flex: 0 0 auto;
+  width: var(--lbtv-caret-size);
+  height: var(--lbtv-caret-size);
+  margin-right: var(--lbtv-caret-spacing);
+  background-color: var(--lbtv-caret-color);
+  -webkit-mask: var(--lbtv-chevron-icon) center / contain no-repeat;
+  mask: var(--lbtv-chevron-icon) center / contain no-repeat;
+  transition: transform 0.18s ease, background-color 0.15s ease;
+  vertical-align: middle;
+}
+
+/* foglia: stesso spazio, nessuna freccia */
+.LBTVChevron.LBTVWrapLabels .LBTVEmptyCaret > .LBTVRow::before {
+  visibility: hidden;
+}
+
+.LBTVChevron:not(.LBTVWrapLabels) .LBTVCaret-Down::before,
+.LBTVChevron.LBTVWrapLabels .LBTVCaret-Down > .LBTVRow::before {
+  transform: rotate(90deg);
+  background-color: var(--lbtv-caret-open-color);
+}
+
+@media (hover: hover) {
+  .LBTVChevron:not(.LBTVWrapLabels) .LBTVCaret:hover::before,
+  .LBTVChevron.LBTVWrapLabels .LBTVCaret > .LBTVRow:hover::before {
+    background-color: var(--lbtv-caret-hover-color);
+  }
+}

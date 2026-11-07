@@ -1,0 +1,53 @@
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#app-header,
+#app-footer {
+  background-color: var(--header-bg);
+  padding: 1rem;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--form-border);
+  border-top: 1px solid var(--form-border);
+}
+
+#btnMenu {
+  font-size: 29px;
+  color: var(--color-text-dark);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  top: -3px;
+}
+
+#btnMenu:hover {
+  color: var(--color-primary);
+}
+
+#main-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#left-column,
+#right-column {
+  flex-shrink: 0;
+  border-right: 1px solid var(--form-border);
+  border-left: 1px solid var(--form-border);
+}
+
+#center-container {
+  padding: 4px 8px;
+  flex-grow: 1;
+  overflow: hidden;
+  display: flex;
+}
+
+.hidden {
+  display: none !important;
+}
+
