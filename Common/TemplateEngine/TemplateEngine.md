@@ -29,7 +29,7 @@ var
   _Tpl  : String;
   _Data : TJSObject;
 begin
-  _Tpl := AWait(String, LoadTemplate('cmms/pages/admin-group-row.html'));   // testo, con cache
+  _Tpl := AWait(String, LoadTemplate('pages/group-row.html'));   // testo, con cache
   _Data := TJSObject.new;
   _Data.Properties['rows'] := _Items;                                       // TJSArray di TJSObject
   FListEl.innerHTML := TemplateEngine.RenderTemplate(_Tpl, _Data);
@@ -39,7 +39,7 @@ end;
 Con i frammenti ricorsivi (`LoadTemplateSections` legge un file con piu' modelli separati da `<!-- @nome -->`):
 
 ```pascal
-_Parts := AWait(TJSObject, LoadTemplateSections('cmms/pages/exclusion-tree.html'));
+_Parts := AWait(TJSObject, LoadTemplateSections('pages/tree.html'));
 FListEl.innerHTML := TemplateEngine.RenderTemplateWithPartials(
   String(_Parts.Properties['tree']), _Data, _Parts);
 ```
@@ -56,28 +56,28 @@ Regole pratiche:
 
 ## Esempio completo: albero ricorsivo (HTML, dati e Pascal)
 
-Caso reale: l'albero degli impianti con una casella per ogni nodo (`uCMMSRoleAssetExclusionDialog`). Ogni nodo puo' avere
+Esempio: un albero (radice, rami, foglie) con una casella per ogni nodo. Ogni nodo puo' avere
 dei figli, che a loro volta ne hanno: il numero di livelli non e' noto in anticipo, quindi serve un modello che richiami se stesso.
 
 ### 1. Il file HTML: ogni pezzo ha un NOME
 
-Un solo file, `cmms/pages/role-asset-exclusion-tree.html`, con **piu' modelli**. Ognuno inizia con una riga
+Un solo file, `pages/tree.html`, con **piu' modelli**. Ognuno inizia con una riga
 `<!-- @nome -->`: **il nome dopo la `@` e' l'identificativo con cui il Pascal e gli altri modelli ritrovano quel pezzo**.
 Senza nome un frammento non si puo' ne' scegliere dal Pascal ne' richiamare con `{{> nome}}`.
 
 ```html
 <!-- @tree -->
-<ul class="cmms-exclusion-root">{{#each nodes}}{{> node}}{{/each}}</ul>
+<ul class="tree-root">{{#each nodes}}{{> node}}{{/each}}</ul>
 
 <!-- @node -->
-<li class="cmms-exclusion-node" data-uuid="{{uuid}}">
-  <div class="cmms-exclusion-row">
-    <input type="checkbox" class="cmms-exclusion-chk" data-uuid="{{uuid}}" {{checked}}>
-    <span class="cmms-exclusion-name">{{name}}</span>
-    {{#if code}}<span class="cmms-exclusion-code">({{code}})</span>{{/if}}
+<li class="tree-node" data-uuid="{{uuid}}">
+  <div class="tree-row">
+    <input type="checkbox" class="tree-chk" data-uuid="{{uuid}}" {{checked}}>
+    <span class="tree-name">{{name}}</span>
+    {{#if code}}<span class="tree-code">({{code}})</span>{{/if}}
   </div>
   {{#if children}}
-  <ul class="cmms-exclusion-nested">{{#each children}}{{> node}}{{/each}}</ul>
+  <ul class="tree-nested">{{#each children}}{{> node}}{{/each}}</ul>
   {{/if}}
 </li>
 ```
@@ -100,29 +100,29 @@ Il server restituisce un elenco **piatto**, un record per nodo, con il riferimen
   {
     "uuid": "u1",
     "parent_uuid": null,
-    "name": "Stabilimento",
-    "code": "ST",
+    "name": "Radice",
+    "code": "R",
     "checked": ""
   },
   {
     "uuid": "u2",
     "parent_uuid": "u1",
-    "name": "Linea 1",
-    "code": "L1",
+    "name": "Ramo 1",
+    "code": "B1",
     "checked": ""
   },
   {
     "uuid": "u3",
     "parent_uuid": "u2",
-    "name": "Estrusore <A&B>",
+    "name": "Foglia <A&B>",
     "code": "",
     "checked": ""
   },
   {
     "uuid": "u4",
     "parent_uuid": "u1",
-    "name": "Linea 2",
-    "code": "L2",
+    "name": "Ramo 2",
+    "code": "B2",
     "checked": "checked"
   }
 ]
@@ -139,19 +139,19 @@ Dopo le due preparazioni il motore riceve l'oggetto `{ "nodes": [ ...radici... ]
     {
       "uuid": "u1",
       "parent_uuid": null,
-      "name": "Stabilimento",
-      "code": "ST",
+      "name": "Radice",
+      "code": "R",
       "children": [
         {
           "uuid": "u2",
           "parent_uuid": "u1",
-          "name": "Linea 1",
-          "code": "L1",
+          "name": "Ramo 1",
+          "code": "B1",
           "children": [
             {
               "uuid": "u3",
               "parent_uuid": "u2",
-              "name": "Estrusore <A&B>",
+              "name": "Foglia <A&B>",
               "code": "",
               "children": [],
               "checked": ""
@@ -162,8 +162,8 @@ Dopo le due preparazioni il motore riceve l'oggetto `{ "nodes": [ ...radici... ]
         {
           "uuid": "u4",
           "parent_uuid": "u1",
-          "name": "Linea 2",
-          "code": "L2",
+          "name": "Ramo 2",
+          "code": "B2",
           "children": [],
           "checked": "checked"
         }
@@ -174,7 +174,7 @@ Dopo le due preparazioni il motore riceve l'oggetto `{ "nodes": [ ...radici... ]
 ```
 
 I campi usati dal modello sono `uuid`, `name`, `code`, `checked` e `children`. Gli altri (come `parent_uuid`) sono ignorati.
-I valori vanno passati **grezzi** (`Estrusore <A&B>`): l'escape lo fa il motore.
+I valori vanno passati **grezzi** (`Foglia <A&B>`): l'escape lo fa il motore.
 
 ### 3. L'uso in Pascal
 
@@ -183,7 +183,7 @@ uses
   JS, Web, SysUtils, TemplateEngine, uLBTemplateLoader;
 
 const
-  cTreeTemplatePath = 'cmms/pages/role-asset-exclusion-tree.html';
+  cTreeTemplatePath = 'pages/tree.html';
 
 // 1. annidare: dall'elenco piatto alla foresta (ogni nodo con il suo array 'children')
 procedure NestFlatList(aFlat, aForest: TJSArray);
@@ -218,8 +218,8 @@ begin
   end;
 end;
 
-// 2. marcare: 'checked' sui nodi presenti nell'insieme degli esclusi (ricorsiva)
-procedure MarkChecked(aForest: TJSArray; aExcludedSet: TJSObject);
+// 2. marcare: 'checked' sui nodi presenti nell'insieme dei nodi spuntati (ricorsiva)
+procedure MarkChecked(aForest: TJSArray; aCheckedSet: TJSObject);
 var
   i     : Integer;
   _Item : TJSObject;
@@ -227,16 +227,16 @@ begin
   for i := 0 to aForest.Length - 1 do
   begin
     _Item := TJSObject(aForest.Elements[i]);
-    if aExcludedSet.hasOwnProperty(String(_Item.Properties['uuid'])) then
+    if aCheckedSet.hasOwnProperty(String(_Item.Properties['uuid'])) then
       _Item.Properties['checked'] := 'checked'
     else
       _Item.Properties['checked'] := '';
-    MarkChecked(TJSArray(_Item.Properties['children']), aExcludedSet);
+    MarkChecked(TJSArray(_Item.Properties['children']), aCheckedSet);
   end;
 end;
 
 // 3. rendering: un solo passaggio per tutto l'albero
-procedure TCMMSRoleAssetExclusionDialog.RenderTree(aFlat: TJSArray; aExcludedSet: TJSObject);
+procedure TTreeDialog.RenderTree(aFlat: TJSArray; aCheckedSet: TJSObject);
 var
   _Parts  : TJSObject;   // nome -> testo del modello: { tree: '...', node: '...' }
   _Forest : TJSArray;
@@ -251,7 +251,7 @@ begin
 
   _Forest := TJSArray.new;
   NestFlatList(aFlat, _Forest);
-  MarkChecked(_Forest, aExcludedSet);
+  MarkChecked(_Forest, aCheckedSet);
 
   _Data := TJSObject.new;
   _Data.Properties['nodes'] := _Forest;                                  // il nome usato in {{#each nodes}}
@@ -270,37 +270,37 @@ Tre punti da ricordare:
 
 ### 4. Il risultato
 
-Con i dati di sopra (e `u4` tra gli esclusi) l'HTML prodotto e':
+Con i dati di sopra (e `u4` tra i nodi spuntati) l'HTML prodotto e':
 
 ```html
-<ul class="cmms-exclusion-root"><li class="cmms-exclusion-node" data-uuid="u1">
-  <div class="cmms-exclusion-row">
-    <input type="checkbox" class="cmms-exclusion-chk" data-uuid="u1" >
-    <span class="cmms-exclusion-name">Stabilimento</span>
-    <span class="cmms-exclusion-code">(ST)</span>
+<ul class="tree-root"><li class="tree-node" data-uuid="u1">
+  <div class="tree-row">
+    <input type="checkbox" class="tree-chk" data-uuid="u1" >
+    <span class="tree-name">Radice</span>
+    <span class="tree-code">(R)</span>
   </div>
   
-  <ul class="cmms-exclusion-nested"><li class="cmms-exclusion-node" data-uuid="u2">
-  <div class="cmms-exclusion-row">
-    <input type="checkbox" class="cmms-exclusion-chk" data-uuid="u2" >
-    <span class="cmms-exclusion-name">Linea 1</span>
-    <span class="cmms-exclusion-code">(L1)</span>
+  <ul class="tree-nested"><li class="tree-node" data-uuid="u2">
+  <div class="tree-row">
+    <input type="checkbox" class="tree-chk" data-uuid="u2" >
+    <span class="tree-name">Ramo 1</span>
+    <span class="tree-code">(B1)</span>
   </div>
   
-  <ul class="cmms-exclusion-nested"><li class="cmms-exclusion-node" data-uuid="u3">
-  <div class="cmms-exclusion-row">
-    <input type="checkbox" class="cmms-exclusion-chk" data-uuid="u3" >
-    <span class="cmms-exclusion-name">Estrusore &lt;A&amp;B&gt;</span>
+  <ul class="tree-nested"><li class="tree-node" data-uuid="u3">
+  <div class="tree-row">
+    <input type="checkbox" class="tree-chk" data-uuid="u3" >
+    <span class="tree-name">Foglia &lt;A&amp;B&gt;</span>
     
   </div>
   
 </li></ul>
   
-</li><li class="cmms-exclusion-node" data-uuid="u4">
-  <div class="cmms-exclusion-row">
-    <input type="checkbox" class="cmms-exclusion-chk" data-uuid="u4" checked>
-    <span class="cmms-exclusion-name">Linea 2</span>
-    <span class="cmms-exclusion-code">(L2)</span>
+</li><li class="tree-node" data-uuid="u4">
+  <div class="tree-row">
+    <input type="checkbox" class="tree-chk" data-uuid="u4" checked>
+    <span class="tree-name">Ramo 2</span>
+    <span class="tree-code">(B2)</span>
   </div>
   
 </li></ul>
@@ -365,7 +365,7 @@ Risultato:
 Modello:
 
 ```html
-<ul>{{#each participants}}<li>{{username}}</li>{{else}}<li class="wo-muted">Nessuno ha ancora iniziato la lavorazione.</li>{{/each}}</ul>
+<ul>{{#each participants}}<li>{{username}}</li>{{else}}<li class="muted">Nessun partecipante.</li>{{/each}}</ul>
 ```
 
 Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
@@ -379,7 +379,7 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 Risultato:
 
 ```html
-<ul><li class="wo-muted">Nessuno ha ancora iniziato la lavorazione.</li></ul>
+<ul><li class="muted">Nessun partecipante.</li></ul>
 ```
 
 ### 4. Condizione dentro un ciclo (pulsanti per riga)
@@ -431,8 +431,8 @@ Risultato:
 Modello:
 
 ```html
-{{#each blocks}}<div class="hst-block"><h4>{{title}}</h4>
-{{#each rows}}  <div class="hst-bar-row"><span class="nm">{{label}}</span><span class="n">{{n}}</span></div>
+{{#each blocks}}<div class="stat-block"><h4>{{title}}</h4>
+{{#each rows}}  <div class="stat-bar-row"><span class="nm">{{label}}</span><span class="n">{{n}}</span></div>
 {{/each}}</div>{{/each}}
 ```
 
@@ -445,11 +445,11 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
       "title": "Per tipologia",
       "rows": [
         {
-          "label": "GUA - Guasto",
+          "label": "A - Categoria A",
           "n": 12
         },
         {
-          "label": "MAN - Manutenzione",
+          "label": "B - Categoria B",
           "n": 7
         }
       ]
@@ -470,11 +470,11 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 Risultato:
 
 ```html
-<div class="hst-block"><h4>Per tipologia</h4>
-  <div class="hst-bar-row"><span class="nm">GUA - Guasto</span><span class="n">12</span></div>
-  <div class="hst-bar-row"><span class="nm">MAN - Manutenzione</span><span class="n">7</span></div>
-</div><div class="hst-block"><h4>Per mese</h4>
-  <div class="hst-bar-row"><span class="nm">2026-09</span><span class="n">9</span></div>
+<div class="stat-block"><h4>Per tipologia</h4>
+  <div class="stat-bar-row"><span class="nm">A - Categoria A</span><span class="n">12</span></div>
+  <div class="stat-bar-row"><span class="nm">B - Categoria B</span><span class="n">7</span></div>
+</div><div class="stat-block"><h4>Per mese</h4>
+  <div class="stat-bar-row"><span class="nm">2026-09</span><span class="n">9</span></div>
 </div>
 ```
 
@@ -490,13 +490,13 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 
 ```json
 {
-  "asset": "Pressa 4",
+  "asset": "Elemento 4",
   "groups": [
     {
-      "name": "Elettrici"
+      "name": "Gruppo A"
     },
     {
-      "name": "Meccanici"
+      "name": "Gruppo B"
     }
   ]
 }
@@ -505,7 +505,7 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 Risultato:
 
 ```html
-<h4>Elettrici (Pressa 4)</h4><h4>Meccanici (Pressa 4)</h4>
+<h4>Gruppo A (Elemento 4)</h4><h4>Gruppo B (Elemento 4)</h4>
 ```
 
 ### 7. Elenco di stringhe con `{{this}}`
@@ -538,7 +538,7 @@ Risultato:
 Modello:
 
 ```html
-<ul class="cmms-exclusion-root">{{#each nodes}}{{> node}}{{/each}}</ul>
+<ul class="tree-root">{{#each nodes}}{{> node}}{{/each}}</ul>
 ```
 
 Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
@@ -547,18 +547,18 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 {
   "nodes": [
     {
-      "name": "Stabilimento",
+      "name": "Radice",
       "children": [
         {
-          "name": "Linea 1",
+          "name": "Ramo 1",
           "children": [
             {
-              "name": "Estrusore"
+              "name": "Foglia"
             }
           ]
         },
         {
-          "name": "Linea 2"
+          "name": "Ramo 2"
         }
       ]
     }
@@ -577,7 +577,7 @@ Frammenti:
 Risultato:
 
 ```html
-<ul class="cmms-exclusion-root"><li>Stabilimento<ul><li>Linea 1<ul><li>Estrusore</li></ul></li><li>Linea 2</li></ul></li></ul>
+<ul class="tree-root"><li>Radice<ul><li>Ramo 1<ul><li>Foglia</li></ul></li><li>Ramo 2</li></ul></li></ul>
 ```
 
 ### 9. `{{{ }}}`: HTML già pronto dell'applicazione, e perché `{{ }}` resta sicuro con i dati utente
@@ -592,7 +592,7 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 
 ```json
 {
-  "icon": "<svg class=\"wo-lock\"></svg>",
+  "icon": "<svg class=\"lock-icon\"></svg>",
   "label": "<script>alert(1)</script>"
 }
 ```
@@ -600,7 +600,7 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 Risultato:
 
 ```html
-<div><svg class="wo-lock"></svg> &lt;script&gt;alert(1)&lt;/script&gt;</div>
+<div><svg class="lock-icon"></svg> &lt;script&gt;alert(1)&lt;/script&gt;</div>
 ```
 
 ### 10. `unless` (messaggio quando manca qualcosa)
@@ -608,7 +608,7 @@ Risultato:
 Modello:
 
 ```html
-{{#unless email}}<span class="wo-muted">email non indicata</span>{{else}}{{email}}{{/unless}}
+{{#unless email}}<span class="muted">email non indicata</span>{{else}}{{email}}{{/unless}}
 ```
 
 Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
@@ -622,7 +622,7 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 Risultato:
 
 ```html
-<span class="wo-muted">email non indicata</span>
+<span class="muted">email non indicata</span>
 ```
 
 ## Prima e dopo: cosa cambia nel progetto

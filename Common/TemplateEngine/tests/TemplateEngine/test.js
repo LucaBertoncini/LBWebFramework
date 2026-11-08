@@ -35,7 +35,7 @@ eq('attr poi testo',render('<a title="{{t}}">{{t}}</a>',{t:'1\n2'}),'<a title="1
 // Compatibilita': node test.js <cartella-modelli> [altre...] confronta il motore nuovo con il vecchio sui modelli esistenti
 const dirs=process.argv.slice(2).filter(d=>fs.existsSync(d));
 const data={rows:[{id:3,name:'A&B',code:'<c>',description:'d\nx',members_label:'2 membri',members_hidden:'',inactive_hidden:'hidden'}],
- roles:[{id:1,name:'n',code:'c',description:'',system_badge_hidden:'',inactive_badge_hidden:'hidden',note_hidden:'',actions_hidden:'hidden',cmms_actions_hidden:''}],
+ roles:[{id:1,name:'n',code:'c',description:'',system_badge_hidden:'',inactive_badge_hidden:'hidden',note_hidden:'',actions_hidden:'hidden',extra_actions_hidden:''}],
  groups:[{id:1,name:'g',checked:'checked'}],members:[{id:1,name:'m'}],assignees:[{id:1,name:'a'}],kinds:[{id:1,code:'c',description:'d',checked:''}],title:'T'};
 let n=0; for(const d of dirs) for(const f of fs.readdirSync(d)){ const t=fs.readFileSync(d+'/'+f,'utf8'); if(!/\{\{/.test(t))continue; n++; eq('compat '+f,render(t,data),oldRender(t,data)); }
 console.log(n,'template confrontati; fallimenti:',fail); process.exit(fail?1:0);

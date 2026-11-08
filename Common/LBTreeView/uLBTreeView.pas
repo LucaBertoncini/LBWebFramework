@@ -31,7 +31,7 @@ type
     property Callback: TLBTreeViewMenuItemCallback read FCallback;
     // Proprieta' OPT-IN dell'aspetto della voce (vuote/False per default). Se NESSUNA voce di un menu le imposta,
     // l'HTML del menu e' IDENTICO a prima: i consumatori esistenti non cambiano.
-    //   IconClass  classi CSS di uno <span> icona prima del testo (es. 'cmms-mi cmms-mi-edit'): l'icona la disegna
+    //   IconClass  classi CSS di uno <span> icona prima del testo (es. 'app-mi app-mi-edit'): l'icona la disegna
     //              il CSS dell'applicazione. Se almeno una voce ha l'icona, il menu riceve la classe
     //              LBTVContextMenu-Icons e le voci senza icona hanno uno span vuoto, cosi' i testi restano allineati.
     //   Group      voci vicine per significato: quando cambia rispetto alla voce precedente, la voce riceve la classe
@@ -176,8 +176,8 @@ type
       // Proprieta' OPT-IN (default False - comportamento ORIGINALE
       // invariato per chiunque non la imposti esplicitamente, incluse
       // TUTTE le applicazioni esistenti che gia' consumano questa unit).
-      // Impostarla a True su un'istanza specifica (es. l'albero degli
-      // impianti di un'applicazione) attiva SOLO per quella istanza
+      // Impostarla a True su un'istanza specifica (es. l'albero
+      // principale di un'applicazione) attiva SOLO per quella istanza
       // il testo che va a capo allineato - vedi il commento esteso su
       // FWrapLongLabels sopra e su insertArray/LBTreeView.css per il
       // dettaglio completo. CONTROLLA SOLO L'ASPETTO VISIVO: NON decide

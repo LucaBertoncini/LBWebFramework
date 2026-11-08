@@ -14,7 +14,7 @@ type
   // passate come header/footer/colonne a TWebApplication.Create (vedi
   // TLayoutComponentClass e WebApplication.pas). Senza questo tipo
   // intermedio, il compilatore accetterebbe in quegli slot qualsiasi
-  // discendente di TWebComponent (es. un dialogo, un TCMMSAssetTree),
+  // discendente di TWebComponent (es. un dialogo, un pannello di dettaglio),
   // perdendo la garanzia statica che quelle quattro classi siano
   // effettivamente pensate per rappresentare una delle aree fisse del
   // layout (header, footer, colonna sinistra/destra).

@@ -332,36 +332,36 @@ html/
   index.html
   pages/login.html            common pages
   css/
-  cmms/pages/assets.html      one application
-  cmms/css/assets.css
+  app1/pages/items.html      one application
+  app1/css/items.css
 ```
 
 ```pascal
-// RegisterRoutes: the last parameter is the application's root folder ('cmms' and 'cmms/' are equivalent)
+// RegisterRoutes: the last parameter is the application's root folder ('app1' and 'app1/' are equivalent)
 FPageManager.RegisterForm('login',  TFormLogin);                              // common: root folder ''
-FPageManager.RegisterForm('assets', TFormAssets, 0, 0, '', 'cmms/');          // cmms/pages/assets.html
-FPageManager.RegisterForm('report', TFormReport, 0, 0, 'pages/rep.html', 'cmms/');   // cmms/pages/rep.html
+FPageManager.RegisterForm('items', TFormItems, 0, 0, '', 'app1/');          // app1/pages/items.html
+FPageManager.RegisterForm('report', TFormReport, 0, 0, 'pages/rep.html', 'app1/');   // app1/pages/rep.html
 ```
 
 ```pascal
 type
-  TFormAssets = class(TBaseForm)
+  TFormItems = class(TBaseForm)
   public
     class function loadNeededCSS(const aBasePath: String): Boolean; override;   // NOTE the parameter
     procedure BindUI; override;
   end;
 
-class function TFormAssets.loadNeededCSS(const aBasePath: String): Boolean;
+class function TFormItems.loadNeededCSS(const aBasePath: String): Boolean;
 begin
-  // aBasePath = 'cmms/': the stylesheet follows the application folder if it is renamed
-  if not isCSSLoaded(aBasePath + 'css/assets.css') then
-    AWait(Boolean, loadResource(aBasePath + 'css/assets.css', 'css'));
+  // aBasePath = 'app1/': the stylesheet follows the application folder if it is renamed
+  if not isCSSLoaded(aBasePath + 'css/items.css') then
+    AWait(Boolean, loadResource(aBasePath + 'css/items.css', 'css'));
   Result := True;
 end;
 
-procedure TFormAssets.BindUI;
+procedure TFormItems.BindUI;
 begin
-  // Self.BasePath = 'cmms/' is already assigned here: use it for auxiliary templates
+  // Self.BasePath = 'app1/' is already assigned here: use it for auxiliary templates
   // _RowTemplate := Self.BasePath + 'pages/asset-row.html';
 end;
 ```

@@ -142,15 +142,15 @@ type
 
       Il chiamante decide QUANDO invocarla (tipicamente una volta sola,
       subito dopo Create, o alla prima apertura di un componente creato in
-      anticipo ma mostrato solo su richiesta - vedi uCMMSAssetModelDialog.pas
-      per un esempio concreto).
+      anticipo ma mostrato solo su richiesta, come un dialogo che si apre
+      al clic di un pulsante).
 
       IMPORTANTE - nessuna chiamata automatica a BindUI nel costruttore
       (vedi Create sotto): un TWebComponent il cui markup e' GIA' presente
-      nella pagina ospite al momento della Create (es. TCMMSAssetTree,
-      TCMMSDocumentsPanel, o un dialogo il cui HTML e' statico nella pagina
-      che lo ospita) non usa LoadContent, ma deve invocare Self.BindUI
-      esplicitamente subito dopo la Create - esattamente come fa
+      nella pagina ospite al momento della Create (es. un pannello
+      di dettaglio incluso nel markup della pagina, o un dialogo il cui
+      HTML e' statico nella pagina che lo ospita) non usa LoadContent, ma
+      deve invocare Self.BindUI esplicitamente subito dopo la Create - esattamente come fa
       TPageManager.LoadPage per TBaseForm. Questo e' un cambio di
       comportamento rispetto alla versione precedente: verificare tutti i
       punti del codice che istanziano un TWebComponent/discendente con
@@ -180,10 +180,10 @@ type
           index.html
           pages/            pagine comuni
           css/
-          cmms/
+          app2/
             pages/
             css/
-          wms/
+          app1/
             pages/
             css/
 
@@ -194,7 +194,7 @@ type
     pagina.
 
     La conseguenza e' un'asimmetria fastidiosa: rinominando la cartella
-    di un applicativo (da 'wms' a 'wms1', per dire) il template segue
+    di un applicativo (da 'app1' a 'app10', per dire) il template segue
     perche' il suo percorso e' dichiarato in un punto solo, mentre i
     fogli di stile restano indietro - e il guasto e' silenzioso, perche'
     la pagina si carica ugualmente, solo senza stile.
@@ -218,12 +218,12 @@ type
     usavano prima che esistesse questa nozione:
 
         ''      + 'css/login.css'    ->  'css/login.css'
-        'wms/'  + 'css/ricerche.css' ->  'wms/css/ricerche.css'
+        'app1/'  + 'css/reports.css' ->  'app1/css/reports.css'
 
     Una pagina che vive nella radice non e' quindi un caso particolare
     da gestire: e' semplicemente l'applicativo che ha la radice come
     propria cartella. Le pagine gia' scritte, che compongono percorsi
-    come 'css/assets.css', continuano a funzionare tali e quali e
+    come 'css/items.css', continuano a funzionare tali e quali e
     possono ignorare del tutto il nuovo parametro.
 
     LA BARRA FINALE E' GARANTITA: TPageManager.RegisterForm normalizza
@@ -238,13 +238,13 @@ type
       class function getTemplatePath(): String; virtual;
 
       { aBasePath: cartella radice dell'applicativo a cui la pagina
-        appartiene, con barra finale gia' garantita ('wms/', 'cmms/',
+        appartiene, con barra finale gia' garantita ('app1/', 'app2/',
         oppure stringa vuota per le pagine che vivono nella radice).
 
         Da anteporre al percorso di ciascun foglio di stile:
 
-            if not isCSSLoaded(aBasePath + 'css/ricerche.css') then
-              ... loadResource(aBasePath + 'css/ricerche.css', 'css') ...
+            if not isCSSLoaded(aBasePath + 'css/reports.css') then
+              ... loadResource(aBasePath + 'css/reports.css', 'css') ...
 
         Un override che non abbia bisogno di distinguere l'applicativo
         puo' semplicemente ignorare il parametro: il comportamento

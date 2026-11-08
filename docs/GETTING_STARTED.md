@@ -120,21 +120,21 @@ end.
 | un messaggio all'utente | `ShowMessage('Titolo', 'Testo', mtInformation)` |
 | chiamare il server | `TJSAsyncPOSTRequest`: si attende con `AWait`, si controlla `.ok` (mai `try/except` sulla rete) |
 | pagine diverse per mobile e desktop | `RegisterForm('r', TFormMobile)` + `RegisterForm('r', TFormDesktop, 768, 0, 'pages/r-desktop.html')` |
-| più applicativi sullo stesso server | ultimo parametro `aBasePath` di `RegisterForm` ('wms/'), vedi sotto |
+| più applicativi sullo stesso server | ultimo parametro `aBasePath` di `RegisterForm` ('app1/'), vedi sotto |
 
 ### Più applicativi sullo stesso server
 
 ```pascal
-FPageManager.RegisterForm('assets', TFormAssets, 0, 0, '', 'cmms/');   // pagine in cmms/pages/assets.html
+FPageManager.RegisterForm('items', TFormItems, 0, 0, '', 'app1/');   // pagine in app1/pages/items.html
 ```
 
 La pagina riceve la cartella in `BasePath` e in `loadNeededCSS(aBasePath)`:
 
 ```pascal
-class function TFormAssets.loadNeededCSS(const aBasePath: String): Boolean;
+class function TFormItems.loadNeededCSS(const aBasePath: String): Boolean;
 begin
-  if not isCSSLoaded(aBasePath + 'css/assets.css') then
-    AWait(Boolean, loadResource(aBasePath + 'css/assets.css', 'css'));
+  if not isCSSLoaded(aBasePath + 'css/items.css') then
+    AWait(Boolean, loadResource(aBasePath + 'css/items.css', 'css'));
   Result := True;
 end;
 ```

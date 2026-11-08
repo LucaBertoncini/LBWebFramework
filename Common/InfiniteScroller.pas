@@ -8,8 +8,8 @@ unit InfiniteScroller;
   BUGFIX (QUESTO AGGIORNAMENTO): PRIMO/UNICO CHUNK CHE NON RIEMPIE IL
   CONTENITORE - NESSUN ULTERIORE CHUNK VIENE MAI CARICATO
   ----------------------------------------------------------------------
-  Segnalato con uno screenshot concreto (CMMS, pagina di ricerca): una
-  ricerca restituiva 14 documenti, ma solo i primi 5 (un chunk,
+  Segnalato con uno screenshot concreto (una pagina di ricerca): una
+  ricerca restituiva 14 elementi, ma solo i primi 5 (un chunk,
   ItemsPerChunk=5) venivano mostrati - i restanti 9 restavano in memoria
   (il chiamante li ha gia' tutti, passati a LoadData/OnGetData) ma mai
   inseriti nel DOM.
@@ -20,7 +20,7 @@ unit InfiniteScroller;
   HandleScroll, quando l'evento 'scroll' del CONTENITORE (non della
   finestra) si verifica vicino al fondo. Se il contenuto del primo
   (unico) chunk renderizzato NON supera l'altezza visibile del
-  contenitore (es. .cmms-search-results, max-height:65vh;
+  contenitore (es. .search-results, max-height:65vh;
   overflow-y:auto - un'altezza pensata apposta per generare uno scroll
   interno quando il contenuto e' sufficiente), il contenitore non ha
   ALCUNA barra di scorrimento: l'evento 'scroll' su di esso non si

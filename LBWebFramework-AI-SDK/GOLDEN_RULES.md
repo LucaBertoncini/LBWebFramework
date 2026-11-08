@@ -187,7 +187,7 @@ verified against the real source (`WebComponent.pas`, `PageManager.pas`,
 
 ## Several applications on one server
 
-`RegisterForm(aRoute, aClass, aMinWidth, aMinHeight, aHtmlFile, aBasePath)`: `aBasePath` (`'wms/'`) is the
+`RegisterForm(aRoute, aClass, aMinWidth, aMinHeight, aHtmlFile, aBasePath)`: `aBasePath` (`'app1/'`) is the
 application's root folder; the template is `aBasePath + aHtmlFile` (or `aBasePath + 'pages/<route>.html'`).
 The page receives the folder in `class function loadNeededCSS(const aBasePath: String)` and in the instance
 property `BasePath`. **The override must have the `aBasePath` parameter** — `loadNeededCSS()` without it does

@@ -110,7 +110,7 @@ property BasePath: String read FBasePath write FBasePath;
 * `getTemplatePath` — se restituisce un percorso non vuoto, **vince su tutto** ed è un percorso completo
   (la cartella radice non viene anteposta).
 * `loadNeededCSS(aBasePath)` — l'override compone i percorsi dei propri fogli a partire da `aBasePath`
-  (`'wms/'`, `'cmms/'` oppure `''`). **La firma ha il parametro**: un override senza parametro non
+  (`'app1/'` oppure `''`). **La firma ha il parametro**: un override senza parametro non
   corrisponde al metodo virtuale.
 * `BasePath` — la stessa cartella, disponibile all'istanza (per template ausiliari). Assegnata prima di `BindUI`.
 
@@ -142,7 +142,7 @@ di avvio. La stessa rotta può essere registrata più volte con soglie diverse (
 2. `aHtmlFile` della registrazione, relativo alla cartella radice (`aBasePath`);
 3. `aBasePath + 'pages/' + rotta + '.html'`.
 
-`aBasePath` riceve la barra finale se manca (`'wms'` ≡ `'wms/'`).
+`aBasePath` riceve la barra finale se manca (`'app1'` ≡ `'app1/'`).
 
 **Sequenza di `LoadPage`** (unico punto di passaggio di ogni navigazione): `OnValidatePage` può trasformare la rotta →
 scelta della registrazione → `loadNeededCSS(BasePath)` → fetch del template → **solo se riuscito**: libera la pagina

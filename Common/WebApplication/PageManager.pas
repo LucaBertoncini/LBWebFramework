@@ -155,13 +155,13 @@ unit PageManager;
   quella esplicita (NavigateTo), sia quella implicita del browser
   (HandlePopState, avanti/indietro), sia il caricamento iniziale
   (StartRouting) - agganciarsi qui, invece che ripetere una chiamata in
-  ciascun metodo "gotoXxx" del chiamante (uCMMSWebApplication.pas),
+  ciascun metodo "gotoXxx" del chiamante (la classe derivata da TWebApplication),
   copre automaticamente tutti e tre i casi con un solo punto di codice,
   ed e' inoltre a prova di futuri metodi di navigazione aggiunti piu'
   avanti (continuerebbero comunque a passare da qui).
   aRoute passato a OnPageLoaded e' la rotta EFFETTIVA dopo l'eventuale
   trasformazione di OnValidatePage (es. un utente non loggato che chiede
-  'assets' riceve invece 'login'): il chiamante dell'evento riceve quindi
+  'items' riceve invece 'login'): il chiamante dell'evento riceve quindi
   sempre la rotta della pagina REALMENTE mostrata, mai quella
   originariamente richiesta.
   Non invocato in caso di errore (form non trovato, fetch del template
@@ -183,10 +183,10 @@ unit PageManager;
         index.html
         pages/            pagine comuni (accesso, selettore, errori)
         css/
-        cmms/
+        app2/
           pages/
           css/
-        wms/
+        app1/
           pages/
           css/
 
@@ -202,7 +202,7 @@ unit PageManager;
                   'pages/<rotta>.html', come prima.
 
       aBasePath   la cartella radice dell'applicativo a cui la pagina
-                  appartiene ('wms/', 'cmms/'). Se omessa la pagina vive
+                  appartiene ('app1/', 'app2/'). Se omessa la pagina vive
                   nella radice, ed e' esattamente il comportamento
                   precedente a questo aggiornamento.
 
@@ -216,7 +216,7 @@ unit PageManager;
   stesse stringhe di prima:
 
       ''     + 'pages/login.html'     ->  'pages/login.html'
-      'wms/' + 'pages/ricerche.html'  ->  'wms/pages/ricerche.html'
+      'app1/' + 'pages/reports.html'  ->  'app1/pages/reports.html'
 
   Non esiste quindi alcun ramo dedicato alla compatibilita': e' la
   stessa espressione, con un prefisso che per le pagine nella radice e'
@@ -309,11 +309,11 @@ type
 
         aHtmlFile   file del template, RELATIVO ad aBasePath. Omesso:
                     vale 'pages/<rotta>.html'.
-        aBasePath   cartella radice dell'applicativo ('wms/', 'cmms/').
+        aBasePath   cartella radice dell'applicativo ('app1/', 'app2/').
                     Omessa: la pagina vive nella radice del sito.
 
       La barra finale di aBasePath viene aggiunta qui se manca, cosi'
-      'wms' e 'wms/' sono equivalenti e chi registra una rotta non deve
+      'app1' e 'app1/' sono equivalenti e chi registra una rotta non deve
       ricordarsi la convenzione. }
     procedure RegisterForm(aRoute: string; aFormClass: TBaseFormClass; aMinWidth: NativeInt = 0; aMinHeight: NativeInt = 0; const aHtmlFile: String = ''; const aBasePath: String = '');
 
@@ -326,7 +326,7 @@ type
 
     property OnValidatePage: TOnValidatePageEvent write FOnValidatePage;
     // NUOVO: write-only, stesso stile di OnValidatePage sopra - il
-    // chiamante (TCMMSWebApplication) assegna un handler, non legge mai
+    // chiamante (la classe derivata da TWebApplication) assegna un handler, non legge mai
     // indietro il valore assegnato.
     property OnPageLoaded: TOnPageLoadedEvent write FOnPageLoaded;
   end;
@@ -373,8 +373,8 @@ begin
     regList := TJSArray(FFormRegistrations.get(aRoute));
 
   // La barra finale e' cio' che rende corretta ogni concatenazione
-  // successiva: senza, 'wms' + 'pages/x.html' produrrebbe
-  // 'wmspages/x.html'. Viene aggiunta qui una volta sola, invece di
+  // successiva: senza, 'app1' + 'pages/x.html' produrrebbe
+  // 'app1pages/x.html'. Viene aggiunta qui una volta sola, invece di
   // pretenderla da chi registra la rotta.
   _Base := Trim(aBasePath);
   if (_Base <> '') and (_Base[Length(_Base)] <> '/') then
