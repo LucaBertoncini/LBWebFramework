@@ -1,167 +1,257 @@
-# pas2js SPA Framework Documentation
+# LBWebFramework — pas2js SPA Framework
 
-## Introduction
+A lightweight, component-based framework for building Single-Page Applications with pas2js, writing the application
+logic entirely in Pascal. It gives a solid architectural base (application shell, routing, components, event bus,
+ready-made UI helpers) and stays minimal and unopinionated: the HTML and CSS are yours.
 
-This is a lightweight, component-based framework for building modern Single-Page Applications (SPAs) using pas2js. It provides a solid architectural foundation for creating interactive and data-driven web applications while writing the logic entirely in Pascal.
+This file is the entry point. Detailed documentation is in `docs/`:
 
-The framework is designed to be minimal, extensible, and unopinionated, giving the developer full control over the final application.
+| File | Content |
+| --- | --- |
+| `docs/GETTING_STARTED.md` | A first "Hello" page step by step. |
+| `docs/FRAMEWORK_REFERENCE.md` | Reference of every unit: signatures, behaviour, conventions. |
+| `docs/Pas2JS_SPA_Framework_Docs*.docx / .pdf` | Full manual (Italian and English) with a complete example application. |
+| `docs/CHANGELOG.md` | What changed between versions of the framework. |
+| `LBWebFramework-AI-SDK/` | Rules and examples for AI assistants working with the framework. |
 
-## Core Concepts
+## Core concepts
 
-The framework is built on a few key architectural ideas:
+1. **Application shell (`TWebApplication`).** The whole application is managed by one shell class. Your application
+   inherits from it, registers its routes and, optionally, fills the layout areas (header, footer, side columns).
+   The shell is a singleton, reachable through `gv_WebApplication`.
 
-1.  **Application Shell (`TWebApplication`):** The entire application is managed by a main "shell" class. Your specific app will inherit from `TWebApplication` and override virtual methods to configure itself. This provides a structured, high-level entry point and handles the boilerplate of setting up the main layout components.
+2. **Components (`TWebComponent`, `TBaseForm`).** Every piece of the UI, from a header to a full page, is a
+   component: a Pascal class that manages a part of the DOM. A page is a `TBaseForm` bound to a route.
 
-2.  **Component-Based Architecture (`TWebComponent`, `TBaseForm`):** Every piece of the UI, from a simple header to a complex page, is a "Component". A component is a Pascal class that manages a piece of the DOM. This pattern encourages encapsulation and reusability.
+3. **View and logic are separate.** The HTML (the view) is declarative and exposes elements through `id`. The Pascal
+   class finds the elements with `getElementById` and binds events in `BindUI`. The Pascal code does not generate
+   complex markup.
 
-3.  **Decoupled Views & Logic:** The HTML templates (the "View") are purely declarative and use `id`s to expose elements. The Pascal components (the "ViewModel") contain all the logic, find elements by `id`, and bind events programmatically. This provides a clean separation of concerns.
+4. **Decoupled communication (`TjsEventsManager`).** Components do not call each other directly: they talk through
+   the global event bus `gv_EventsManager`. One component raises a named event (`RaiseEvent`), the others listen
+   to it (`AddListener`) without knowing who raised it.
 
-4.  **Decoupled Communication (`TEventsManager`):** Components do not talk to each other directly. They communicate through a global Event Bus. A component can `Trigger` a named event (e.g., `'column-toggled'`), and other components can `Subscribe` to that event to react, without either component knowing about the other's existence.
+5. **Data shared between pages.** Pages are destroyed on every navigation. Data that must be available from one page
+   to the next lives in the application object: add fields and properties to your `TWebApplication` descendant and
+   read them from any form, e.g. `TMyApp(gv_WebApplication).SelectedItem`.
 
-5.  **Adaptive and Content-Aware Layouts:** The framework is designed to be both responsive (via CSS) and adaptive.
-    *   The `TPageManager` can load different HTML templates based on screen size.
-    *   Layout components like `TSideColumnComponent` are intelligent, hiding themselves on mobile by default and only appearing if they are explicitly loaded with content.
+6. **Adaptive layouts.** The framework is responsive through CSS and adaptive through `TPageManager`, which can
+   register several forms (or HTML files) for the same route, one per screen size. Side columns
+   (`TSideColumnComponent`) hide themselves on small screens.
 
-## File Structure
-
-The project is organized into the following main directories:
+## Folder structure
 
 ```
-Pas2JS_framework/
-├── Common/
-│   ├── WebApplication.pas
-│   └── ...                 # Core, reusable framework units
-│
-└── DemoApp/
-    ├── public/
-    │   ├── ...
-    │   └── index.html
-    └── src/
-        ├── forms/
-        │   └── Form.Home.pas
-        └── DemoApp.lpr
+Common/                          Reusable framework units: do not modify them for a single project
+  WebApplication/
+    WebApplication.pas           Application shell
+    PageManager.pas              Routing and page lifecycle
+    WebComponent.pas             TUIElementWrapper, TWebComponent, TBaseForm
+    LayoutComponents.pas         Header, footer, side columns
+    Dialogs.pas                  Modal dialogs
+    css/, html/index.html        Base styles and the application shell page
+  EventsManager.pas              Event bus
+  InfiniteScroller.pas           Progressive loading of long lists
+  TemplateEngine/                Template engine and template loader
+  LBTreeView/                    Tree view component
+  uJSTabulator.pas               Wrapper of the Tabulator library
+  uLBWebUtils.pas                HTTP POST requests, resource loading, text helpers
+  WSManager.pas                  WebSocket manager
+  indexeddbhelper.pas            IndexedDB helper
+  leastrecentlyusedcache.pas     LRU cache
+docs/                            Documentation
+LBWebFramework-AI-SDK/           Instructions for AI assistants
 ```
 
--   **`Common/`**: Contains the core, reusable units of the framework. You generally won't need to modify these files.
--   **`DemoApp/`**: Contains the example application that uses the framework. This is where you will build your app.
-    -   `public/`: All static assets (HTML, CSS, images).
-    -   `src/`: The Pascal source code for your application.
+A project using the framework keeps its own files outside `Common/`:
 
-## How to Build Your Application
+```
+html/
+  index.html                     Copy of Common/WebApplication/html/index.html
+  css/                           Copy of Common/WebApplication/css/
+  pages/                         One HTML fragment per route (hello.html, ...)
+src/
+  MyApp.pas                      Application class
+  Form.Hello.pas                 One unit per page
+  MyProject.lpr                  Main program
+```
 
-Building an application with the framework is straightforward. You create your own application class that inherits from `TWebApplication` and tell it what to do.
+## Building an application
 
-### Step 1: Create your Application Class
+### Step 1: the application class
 
-In `DemoApp/src/DemoApplication.pas`, define your main application class. It must inherit from `TWebApplication`. Here you will override methods to set up your specific application.
+The application class inherits from `TWebApplication`. `RegisterRoutes` is mandatory; the `Initialize...` methods
+are optional.
 
 ```pascal
-// src/DemoApplication.pas
-unit DemoApplication;
+unit MyApp;
 
 interface
+
 uses
-  WebApplication in '../../Common/WebApplication.pas',
-  // ... include your page units ...
-  Form.Home in 'forms/Form.Home.pas';
+  JS, WebApplication, PageManager, LayoutComponents;
 
 type
-  TDemoApplication = class(TWebApplication)
+  TMyApp = class(TWebApplication)
+  strict private
+    FSelectedItem : TJSObject;  // data shared between pages
   protected
-    // Override these methods to configure your app
-    procedure RegisterRoutes(aPageManager: TPageManager); override;
-    procedure InitializeHeader; override;
+    procedure RegisterRoutes(); override;
+    procedure InitializeHeader; override; async;
+    procedure InitializeLeftColumn; override; async;
+  public
+    property SelectedItem : TJSObject read FSelectedItem write FSelectedItem;
   end;
-// ...
-```
 
-### Step 2: Implement Configuration Methods
-
-In the implementation section, provide the logic for the methods you overrode.
-
-**`RegisterRoutes` (Required):** This is where you map URL hashes to your page components.
-
-```pascal
-procedure TDemoApplication.RegisterRoutes(aPageManager: TPageManager);
-begin
-  aPageManager.RegisterForm('home', TFormHome);
-  aPageManager.RegisterForm('login', TFormLogin);
-  aPageManager.RegisterForm('main', TFormMainDashboard);
-end;
-```
-
-**`Initialize...` Methods (Optional):** Use these to load content into the main layout components and decide if they should be visible.
-
-```pascal
-procedure TDemoApplication.InitializeHeader;
-begin
-  // Load content into the main header
-  FHeader.LoadContent('pages/header.html');
-end;
-
-procedure TDemoApplication.InitializeLeftColumn;
-begin
-  // Load content and, only on success, show the column.
-  FLeftColumn.LoadContent('pages/left-menu.html').then(
-    procedure(v: JSValue)
-    begin
-      FLeftColumn.Show;
-    end
-  );
-end;
-```
-
-### Step 3: Set the Entry Point
-
-Your main project file (`DemoApp.lpr`) simply creates an instance of your application class and calls `Run`.
-
-```pascal
-// src/DemoApp.lpr
-program DemoApp;
+implementation
 
 uses
-  DemoApplication in 'DemoApplication.pas';
+  Form.Home, Form.Login;
 
-var
-  App: TDemoApplication;
-
+procedure TMyApp.RegisterRoutes();
 begin
-  App := TDemoApplication.Create;
-  App.Run;
+  FPageManager.RegisterForm('home', TFormHome);
+  FPageManager.RegisterForm('login', TFormLogin);
+end;
+
+procedure TMyApp.InitializeHeader;
+begin
+  AWait(FHeader.LoadContent('partials/header.html'));
+end;
+
+procedure TMyApp.InitializeLeftColumn;
+begin
+  // The column is shown only if its content was loaded successfully
+  if AWait(Boolean, FLeftColumn.LoadContent('partials/left-menu.html')) then
+    FLeftColumn.Show;
+end;
+
 end.
 ```
 
-## Framework Components
+`async` appears only in the declaration of the interface, never in the implementation.
 
-### `BaseForm.pas` & `WebComponent.pas`
-These units define the base classes for all UI components, providing a common lifecycle (`BindUI`, `UnbindUI`). Your pages will typically inherit from `TBaseForm`.
+### Step 2: the pages
 
-### `PageManager.pas`
-The heart of the framework. It handles routing, adaptive layout loading based on screen size, and component lifecycle.
+A page is an HTML fragment plus a class derived from `TBaseForm`:
 
-### `Dialogs.pas`
-A simple utility for showing styled, modal dialog boxes.
+```pascal
+unit Form.Home;
 
-### `TemplateEngine.pas`
-A lightweight templating engine that supports nested data paths (`{{object.field}}`) and list iteration (`{{#each array}}...{{/each}}`).
+interface
 
-### `InfiniteScroller.pas`
-A generic component for efficiently displaying long lists of items with variable heights using the "infinite scrolling" pattern.
+uses
+  Web, JS, WebComponent;
 
-### `LayoutComponents.pas`
-Contains the classes (`THeaderComponent`, `TSideColumnComponent`) that manage the main sections of the `index.html` layout.
+type
+  TFormHome = class(TBaseForm)
+  strict private
+    FTitle  : TUIElementWrapper;
+    FButton : TUIElementWrapper;
+    function OnButtonClick(aSender: TUIElementWrapper; aEvent: TJSMouseEvent): Boolean;
+  public
+    procedure BindUI; override;
+  end;
 
-### `EventsManager.pas`
-A global event bus that allows components to communicate with each other without being directly linked, enabling a more modular architecture.
+implementation
 
-### `WebApplication.pas`
-The main application shell. Your application inherits from this class, providing a structured entry point and abstracting away the boilerplate setup code.
+procedure TFormHome.BindUI;
+begin
+  FTitle  := Self.getElementById('title');
+  FButton := Self.getElementById('my-button');
+  FButton.onclick := @Self.OnButtonClick;
+end;
 
-### `Geolocation.pas`
-A wrapper for the browser's Geolocation API. It provides simple, type-safe procedures to get the device's current position or watch for location changes.
+function TFormHome.OnButtonClick(aSender: TUIElementWrapper; aEvent: TJSMouseEvent): Boolean;
+begin
+  Result := True;
+  FTitle.textContent := 'Clicked!';
+end;
 
-### `DeviceSensors.pas`
-Contains wrappers for the Device Sensor APIs. Currently includes a `TAccelerometer` class to get readings from the device's accelerometer.
+end.
+```
 
-### `BarcodeScanner.pas`
-A component that wraps the `zxing-js` library to provide barcode and QR code scanning capabilities using the device's camera. It abstracts away camera access and the decoding process.
+The wrappers returned by `getElementById` and their event handlers are released by the framework when the page is
+destroyed.
+
+### Step 3: the entry point
+
+The main program creates the application and runs it. The four parameters are the layout component classes; `nil`
+means "use the base class".
+
+```pascal
+program MyProject;
+
+uses
+  MyApp;
+
+var
+  gv_App : TMyApp;
+
+begin
+  gv_App := TMyApp.Create(nil, nil, nil, nil);
+  gv_App.Run;
+end.
+```
+
+### Moving between pages
+
+```pascal
+// In the source page: store the data in the application object, then navigate
+TMyApp(gv_WebApplication).SelectedItem := _item;
+gv_WebApplication.PageManager.NavigateTo('detail');
+
+// In the destination page (BindUI)
+_item := TMyApp(gv_WebApplication).SelectedItem;
+```
+
+### Communicating through the event bus
+
+```pascal
+// Declare the event once, then listen to it
+gv_EventsManager.AddEvent('column-toggled');
+gv_EventsManager.AddListener('column-toggled', Self,
+  procedure(Sender: JSValue)
+  begin
+    // react to the event
+  end);
+
+// Raise it from anywhere
+gv_EventsManager.RaiseEvent('column-toggled', Self);
+
+// Remove every listener registered by an object (typically in its destructor)
+gv_EventsManager.RemoveListenersFor(Self);
+```
+
+## Framework units
+
+| Unit | Purpose |
+| --- | --- |
+| `WebComponent.pas` | Base classes: `TUIElementWrapper` (typed access to a DOM element), `TWebComponent` (lifecycle, `BindUI`, `LoadContent`), `TBaseForm` (a page bound to a route). |
+| `PageManager.pas` | Routing on the URL hash, one navigation at a time, forms registered per screen size, browser back/forward support. |
+| `WebApplication.pas` | The application shell and the `gv_WebApplication` singleton; wake lock management. |
+| `LayoutComponents.pas` | `THeaderComponent`, `TFooterComponent`, `TSideColumnComponent`: the fixed areas of `index.html`. |
+| `EventsManager.pas` | Global event bus (`AddEvent`, `AddListener`, `RaiseEvent`, `RemoveListenersFor`). |
+| `Dialogs.pas` | Non-blocking modal dialogs: `ShowMessage(aTitle, aMessage, aMsgType)`. |
+| `TemplateEngine.pas`, `uLBTemplateLoader.pas` | Templates with `{{field}}`, `{{#each}}`, `{{#if}}`, `{{#unless}}` and partials; loading of templates from files. |
+| `InfiniteScroller.pas` | Efficient display of long lists, rendered in chunks as the user scrolls. |
+| `uLBTreeView.pas` | Tree view with context menus. |
+| `uJSTabulator.pas` | Wrapper of the Tabulator library (the library itself must be loaded by the project). |
+| `uLBWebUtils.pas` | Asynchronous HTTP POST requests, loading of CSS/JS resources, HTML encoding helpers. |
+| `WSManager.pas` | WebSocket connection that turns incoming messages into events on the event bus. |
+| `indexeddbhelper.pas` | Promise-based access to IndexedDB. |
+| `leastrecentlyusedcache.pas` | Fixed-capacity cache with least-recently-used eviction. |
+
+## Writing conventions
+
+- Fields `F...`, parameters `a...`/`an...`, local variables `_...` (one-character names such as loop indexes are the
+  only exception).
+- Calls to a method of the class itself are prefixed with `Self.`.
+- Variable names state their purpose and are as specific as possible.
+- A blank line separates one routine from the next.
+- Repeated code goes into a shared project unit; code of general validity is proposed for the base framework.
+- `async` appears only in the interface declaration. `AWait` is used only inside `async` routines.
+- A callback declared `of object` accepts only a real method (`@Self.Method`); a `reference to` callback also
+  accepts anonymous procedures.
+
+The code in this file has not been compiled; if the compiler disagrees, the compiler is right.
