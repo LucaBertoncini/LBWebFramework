@@ -1,5 +1,7 @@
 // Port JS 1:1 dell'algoritmo di TemplateEngine.pas (per verificarne la logica con Node)
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\r\n|\n|\r/g,'<br/>');
+const escAttr=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const inTag=o=>o.lastIndexOf('<')>o.lastIndexOf('>');
 const isDefined=v=>v!==undefined&&v!==null;
 function getPath(o,p){ if(!o||p==='')return null; let c=o; for(const k of p.split('.')){ if(c==null||!Object.prototype.hasOwnProperty.call(c,k)) return null; c=c[k]; } return c; }
 const sw=(t,p)=>t.substring(0,p.length)===p;
@@ -19,7 +21,7 @@ function rs(t,sc,pa,d){ let r=''; if(d>32)return r; let pos=0;
   let kind=''; if(sw(tag,'#each '))kind='each'; else if(sw(tag,'#if '))kind='if'; else if(sw(tag,'#unless '))kind='unless';
   if(kind){ const arg=tag.substring(kind.length+1).trim(); const f=findEnd(t,after); if(f){ const has=f.el>=0; const body=has?t.substring(after,f.el):t.substring(after,f.end); const eb=has?t.substring(f.ela,f.end):''; r+=block(kind,arg,body,eb,has,sc,pa,d); pos=f.after; } else { r+=t.substring(o,after); pos=after; } continue; }
   if(sw(tag,'> ')){ const n=tag.substring(2).trim(); if(isDefined(pa)&&Object.prototype.hasOwnProperty.call(pa,n)) r+=rs(String(pa[n]),sc,pa,d+1); pos=after; continue; }
-  if(isPath(tag)&&tag!=='else'&&!sw(tag,'/')){ const v=scopeValue(sc,tag); if(isDefined(v)) r+=esc(v);} else r+=t.substring(o,after); pos=after; }
+  if(isPath(tag)&&tag!=='else'&&!sw(tag,'/')){ const v=scopeValue(sc,tag); if(isDefined(v)) r+=inTag(r)?escAttr(v):esc(v);} else r+=t.substring(o,after); pos=after; }
  return r; }
 const render=(t,d,p)=>rs(t,[d],p||null,0);
 // motore VECCHIO (copia fedele)

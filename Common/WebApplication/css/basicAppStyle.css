@@ -1,0 +1,47 @@
+/* ===========================
+   BASIC STYLE (variabili base)
+=========================== */
+
+:root {
+  --color-primary:       #0077BE;
+  --color-primary-hover: #005999;
+  --color-accent:        #1d1202;
+  --color-accent-hover:  #3a2405;
+  --color-text:          #ffffff;
+  --color-text-dark:     #000000;
+  --color-border-light:  #ddd;
+  --color-border-dark:   #505050;
+  --color-bg-1: rgba(29, 18, 2, 0.8);
+  --color-bg-2: rgba(29, 18, 2, 0.8);
+  --color-bg-3: rgba(29, 18, 2, 0.8);
+  --body-back-trasparency: rgba(0, 0, 0, 0);
+  --body-back-gray:        grayscale(0%);
+  --header-bg: #f0f0f0;
+  --footer-bg: #f0f0f0;
+  --modal-bg:   var(--color-bg-1);
+  --modal-text: var(--color-text);
+  --form-bg:     var(--color-bg-1);
+  --form-border: var(--color-border-light);
+  --btn-primary-bg:    var(--color-primary);
+  --btn-primary-hover: var(--color-primary-hover);
+  --btn-menu-bg:    var(--color-accent);
+  --btn-menu-hover: var(--color-accent-hover);
+  --link-color: var(--color-primary);
+  --scrollbar-thumb:       #888;
+  --scrollbar-thumb-hover: #555;
+  --font-main:  'Trebuchet MS', sans-serif;
+  --font-title: 'Blade Runner Movie Font';
+}
+
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-main);
+  font-size: 16px;
+}
+

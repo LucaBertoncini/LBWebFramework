@@ -59,6 +59,9 @@ type
 
     property State          : TWSState             read  FState;
     property EventFieldName : String               write FEventFieldName;
+    // Campo del messaggio che contiene il payload da passare ai listener.
+    // Vuoto (default): ai listener arriva l'intero messaggio.
+    property DataFieldName  : String               write FDataFieldName;
     property OnStateChange  : TWSStateChangeEvent  write FOnStateChange;
   end;
 
@@ -124,7 +127,10 @@ begin
 end;
 
 procedure TWSManager.Close;
+var
+  _WasConnected: Boolean;
 begin
+  _WasConnected := FState = wsConnected;
   if FReconnectTimer <> 0 then
   begin
     window.clearTimeout(FReconnectTimer);
@@ -142,6 +148,11 @@ begin
   end;
 
   Self.SetState(wsDisconnected);
+
+  // Coerenza con OnClose: anche la chiusura voluta notifica la
+  // disconnessione (altrimenti chi ascolta resta convinto che sia aperta).
+  if _WasConnected and (gv_EventsManager <> nil) then
+    gv_EventsManager.RaiseEvent(cWS_Disconnected, nil);
 end;
 
 function TWSManager.sendMessage(aMsg: TJSObject): Boolean;
@@ -151,7 +162,9 @@ var
 begin
   Result := False;
 
-  if hasValue(FSocket) and hasValue(aMsg) then
+  // Con il socket ancora in connessione (o chiuso) send solleverebbe
+  // un'eccezione InvalidStateError: si invia solo a connessione aperta.
+  if (FState = wsConnected) and hasValue(FSocket) and hasValue(aMsg) then
   begin
     _sMsg := JS.TJSJSON.stringify(aMsg);
     FSocket.send(_sMsg);
@@ -203,7 +216,12 @@ begin
 
     try
       _Msg  := TJSObject(TJSJSON.parse(_Raw));
-      _Evt  := String(_Msg[FEventFieldName]);
+      // Un messaggio privo del campo evento non deve diventare l'evento
+      // "undefined": lo si scarta.
+      if isString(_Msg[FEventFieldName]) then
+        _Evt := String(_Msg[FEventFieldName])
+      else
+        _Evt := '';
 
       if _Evt <> '' then
       begin

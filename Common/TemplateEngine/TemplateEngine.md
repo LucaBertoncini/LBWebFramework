@@ -23,7 +23,7 @@ Ogni valore `{{campo}}` passa da `TextToHTML`: il testo dell'utente non diventa 
 ## Uso dal Pascal
 
 ```pascal
-uses TemplateEngine, uIdroWorld_Dom_Utils;
+uses TemplateEngine, uLBTemplateLoader;
 
 var
   _Tpl  : String;
@@ -49,6 +49,9 @@ Regole pratiche:
 - Booleani e numeri si passano com'e': `Properties['can_join'] := True`, non `'hidden'` o `''`.
 - Un modello con segnaposto dentro i tag (`data-id="{{id}}"`) va letto come **testo** (`fetch` + `.text()`, o `LoadTemplate`)
   e reso prima di toccare il DOM: il parser HTML del browser lo deformerebbe.
+- Dentro un tag (`value="{{note}}"`, `title="{{x}}"`) l'escape e' quello per gli attributi: `& < > " '` e **nessuna** conversione degli a-capo in `<br/>`.
+  Il riconoscimento guarda il testo gia' prodotto nello stesso blocco: un tag aperto in un blocco e chiuso in un altro (`{{#if}}` dentro il tag) non e' riconosciuto.
+- `LoadTemplate` e `LoadTemplateSections` stanno in `uLBTemplateLoader` (cartella TemplateEngine).
 - `else` e i nomi che iniziano con `/` o `#` sono riservati; un tag che non si capisce resta nel testo cosi' com'e'.
 
 ## Esempio completo: albero ricorsivo (HTML, dati e Pascal)
@@ -177,7 +180,7 @@ I valori vanno passati **grezzi** (`Estrusore <A&B>`): l'escape lo fa il motore.
 
 ```pascal
 uses
-  JS, Web, SysUtils, TemplateEngine, uIdroWorld_Dom_Utils;
+  JS, Web, SysUtils, TemplateEngine, uLBTemplateLoader;
 
 const
   cTreeTemplatePath = 'cmms/pages/role-asset-exclusion-tree.html';

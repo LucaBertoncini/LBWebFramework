@@ -28,12 +28,13 @@ unit InfiniteScroller;
   ulteriore chunk viene mai richiesto - anche se FOnGetData avrebbe
   potuto fornirne altri.
 
-  Confermato che questo NON e' specifico del CMMS: lo stesso schema (un
-  solo chunk iniziale via LoadData, tutti i chunk successivi affidati
-  allo scroll dell'utente O a una notifica ESPLICITA e indipendente di
-  "sono arrivati altri dati dalla rete" - vedi TFormSearch.SearchItemsAsync
-  in DMA, che chiama LoadNextChunk quando una NUOVA pagina di risultati
-  arriva dal server) esiste identico in DMA: la' funziona nella pratica
+  Il difetto NON e' specifico di una pagina: lo stesso schema (un solo
+  chunk iniziale via LoadData, tutti i chunk successivi affidati allo
+  scroll dell'utente O a una notifica ESPLICITA e indipendente di
+  "sono arrivati altri dati dalla rete" - il chiamante invoca
+  LoadNextChunk quando una NUOVA pagina di risultati arriva dal server)
+  puo' presentarsi in qualunque applicazione: dove esiste quella notifica
+  esplicita funziona nella pratica
   solo perche' l'arrivo di una nuova pagina di rete e' un evento reale e
   distinto che giustifica una richiesta esplicita di continuazione - ma
   il PRIMISSIMO chunk (RefreshItems/LoadData) ha la stessa esposizione al

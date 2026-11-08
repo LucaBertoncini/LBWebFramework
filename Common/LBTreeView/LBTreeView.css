@@ -25,8 +25,8 @@
   freccia/checkbox/testo allineati, invece di lasciare la freccia
   isolata su una riga a se'
   ----------------------------------------------------------------------
-  QUESTO COMPONENTE E' CONDIVISO (usato anche da altre applicazioni, es.
-  DMA, mai verificate in questa sede): per non rischiare di interferire
+  QUESTO COMPONENTE E' CONDIVISO (usato da piu' applicazioni, non tutte
+  verificabili da chi lo modifica): per non rischiare di interferire
   con un eventuale override CSS gia' esistente altrove (es. un selettore
   diretto ".LBTVCaret::before", che smetterebbe di avere effetto se il
   glifo della freccia venisse spostato incondizionatamente), TUTTE le

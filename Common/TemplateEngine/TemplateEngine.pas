@@ -4,7 +4,9 @@ unit TemplateEngine;
 
   SINTASSI
   ----------------------------------------------------------------------
-    {{campo}}                valore, con escape HTML (TextToHTML)
+    {{campo}}                valore, con escape HTML (TextToHTML); dentro un tag,
+                             cioe' in un valore di attributo, l'escape e'
+                             HtmlEncode senza conversione degli a-capo
     {{oggetto.campo}}        percorso con punti
     {{{campo}}}              valore SENZA escape (solo per HTML gia' sicuro:
                              vedi la nota in fondo)
@@ -58,7 +60,7 @@ function RenderTemplate(const aTemplate: string; const aData: TJSObject): string
 
 // Come RenderTemplate, con i frammenti richiamabili da {{> nome}}: aPartials e'
 // un oggetto nome -> testo del modello (per esempio quello restituito da
-// LoadTemplateSections di uIdroWorld_Dom_Utils). Puo' essere nil.
+// LoadTemplateSections di uLBTemplateLoader). Puo' essere nil.
 function RenderTemplateWithPartials(const aTemplate: string; const aData: TJSObject;
   const aPartials: TJSObject): string;
 
@@ -73,6 +75,15 @@ const
 function StartsWithText(const aText, aPrefix: string): Boolean;
 begin
   Result := TJSString(aText).substring(0, Length(aPrefix)) = aPrefix;
+end;
+
+// True se la posizione corrente dell'output cade DENTRO un tag HTML (tra un
+// '<' e il '>' che lo chiude), cioe' in un valore di attributo. Si guarda solo
+// il piu' vicino fra '<' e '>' gia' prodotti: i valori inseriti sono sempre
+// escapati, quindi nell'output reso un '<' o '>' viene solo dal modello.
+function IsInsideTag(const aOutput: string): Boolean;
+begin
+  Result := TJSString(aOutput).lastIndexOf('<') > TJSString(aOutput).lastIndexOf('>');
 end;
 
 // Percorso con punti dentro un oggetto. nil se manca un passaggio.
@@ -219,7 +230,6 @@ var
   _Value: JSValue;
   _Arr: TJSArray;
   _k: Integer;
-  _Popped: JSValue;
 begin
   Result := '';
   _Value := ScopeValue(aScopes, aArg);
@@ -232,7 +242,7 @@ begin
       begin
         aScopes.push(_Arr[_k]);
         Result := Result + RenderScoped(aBody, aScopes, aPartials, aDepth + 1);
-        _Popped := aScopes.pop;
+        aScopes.pop;
       end;
     end
     else if aHasElse then
@@ -358,7 +368,14 @@ begin
     begin
       _Value := ScopeValue(aScopes, _Tag);
       if isDefined(_Value) then
-        Result := Result + TextToHTML(String(_Value));
+      begin
+        // In un attributo (value="{{x}}", title="{{x}}") un a-capo convertito
+        // in <br/> comparirebbe come testo letterale: li' si fa il solo escape.
+        if IsInsideTag(Result) then
+          Result := Result + HtmlEncode(String(_Value))
+        else
+          Result := Result + TextToHTML(String(_Value));
+      end;
     end
     else
       // tag non riconosciuto (o {{else}} / {{/x}} fuori posto): resta com'e'

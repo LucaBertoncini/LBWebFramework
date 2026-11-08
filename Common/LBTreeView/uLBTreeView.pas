@@ -30,7 +30,7 @@ type
     property Caption: String read FCaption;
     property Callback: TLBTreeViewMenuItemCallback read FCallback;
     // Proprieta' OPT-IN dell'aspetto della voce (vuote/False per default). Se NESSUNA voce di un menu le imposta,
-    // l'HTML del menu e' IDENTICO a prima: i consumatori esistenti (es. DMA) non cambiano.
+    // l'HTML del menu e' IDENTICO a prima: i consumatori esistenti non cambiano.
     //   IconClass  classi CSS di uno <span> icona prima del testo (es. 'cmms-mi cmms-mi-edit'): l'icona la disegna
     //              il CSS dell'applicazione. Se almeno una voce ha l'icona, il menu riceve la classe
     //              LBTVContextMenu-Icons e le voci senza icona hanno uno span vuoto, cosi' i testi restano allineati.
@@ -68,7 +68,7 @@ type
       // default False) - vedi la nota estesa su insertArray sotto e su
       // LBTreeView.css per la spiegazione completa, inclusa la
       // motivazione della scelta opt-in (componente CONDIVISO, usato
-      // anche da altre applicazioni come DMA: un cambiamento del
+      // da piu' applicazioni: un cambiamento del
       // comportamento visivo di DEFAULT avrebbe potuto interferire con un
       // eventuale override CSS gia' esistente altrove e mai verificato in
       // questa sede). QUESTA PROPRIETA' CONTROLLA SOLO L'ASPETTO VISIVO
@@ -93,6 +93,12 @@ type
       // sempre. Vedi la property ChevronCaret.
       FChevronCaret : Boolean;
 
+      // Default True (comportamento storico): etichette dei nodi e voci dei
+      // menu sono inserite come HTML, senza escape. Impostare False per
+      // trattarle come TESTO (con escape): e' la scelta sicura quando i nomi
+      // arrivano dagli utenti.
+      FLabelsAreHtml : Boolean;
+
       FCheckedList : TJSArray;   // lista live dei TJSObject selezionati
       FCheckedElems : TJSArray;  // lista live dei TJSElement DOM selezionati (SingleSelect: max 1)
 
@@ -106,6 +112,7 @@ type
 
     private
       function get_Item(Idx: Integer): TJSObject;
+      function labelHtml(const aText: String): String;
 
       procedure hideContextMenu;
       procedure showContextMenu(X, Y: Integer; aItem: TJSObject);
@@ -168,9 +175,9 @@ type
 
       // Proprieta' OPT-IN (default False - comportamento ORIGINALE
       // invariato per chiunque non la imposti esplicitamente, incluse
-      // TUTTE le applicazioni esistenti che gia' consumano questa unit,
-      // es. DMA). Impostarla a True su un'istanza specifica (es.
-      // TCMMSAssetTree in questo progetto) attiva SOLO per quella istanza
+      // TUTTE le applicazioni esistenti che gia' consumano questa unit).
+      // Impostarla a True su un'istanza specifica (es. l'albero degli
+      // impianti di un'applicazione) attiva SOLO per quella istanza
       // il testo che va a capo allineato - vedi il commento esteso su
       // FWrapLongLabels sopra e su insertArray/LBTreeView.css per il
       // dettaglio completo. CONTROLLA SOLO L'ASPETTO VISIVO: NON decide
@@ -228,6 +235,12 @@ type
       // sempre (--lbtv-caret-color, --lbtv-caret-hover-color, --lbtv-caret-open-color, --lbtv-caret-size).
       // Funziona con e senza WrapLongLabels. Va impostata prima di renderData.
       property ChevronCaret: Boolean read FChevronCaret write FChevronCaret;
+
+      // Default True (come prima): le etichette dei nodi (proprieta' indicata
+      // in setData) e il testo delle voci di menu sono inseriti come HTML.
+      // Impostarla a False li tratta come TESTO (HtmlEncode): da usare quando
+      // i nomi arrivano dagli utenti. Va impostata prima di renderData.
+      property LabelsAreHtml: Boolean read FLabelsAreHtml write FLabelsAreHtml;
   end;
 
 const
@@ -236,7 +249,7 @@ const
 implementation
 
 uses
-  Types, strutils, weborworker;
+  Types, strutils, weborworker, uLBWebUtils;
 
 var
   gv_LBTreeViewItem : Integer = 0;
@@ -295,7 +308,7 @@ function TLBjsTreeView.insertArray(anArray: TJSArray; aLevel: Integer; aParentIt
   FWrapLongLabels = True (LBTreeView.css applica le nuove regole solo
   sotto ".LBTVWrapLabels").
 
-  SICUREZZA per i consumatori esistenti (es. DMA): con FWrapLongLabels =
+  SICUREZZA per i consumatori esistenti: con FWrapLongLabels =
   False E FOnlyCaretToggles = False (il default per chiunque non attivi
   esplicitamente NESSUNA delle due), l'HTML generato qui e' BYTE PER
   BYTE IDENTICO a quello di prima di qualunque di questi aggiornamenti -
@@ -357,9 +370,9 @@ begin
       // - FCheckOnlyLeaf=True (solo le foglie)
       if FChecked and (not FCheckOnlyLeaf or _isLeaf) then
         Result += '<span id="' + _ElemId + '" class="LBTVCheckbox">' +
-                  String(_Item.Properties[FViewedProperty]) + '</span>'
+                  Self.labelHtml(String(_Item.Properties[FViewedProperty])) + '</span>'
       else
-        Result += String(_Item.Properties[FViewedProperty]);
+        Result += Self.labelHtml(String(_Item.Properties[FViewedProperty]));
 
       if _NeedsLabelWrap then
         Result += '</span>'; // chiude LBTVLabel
@@ -444,6 +457,14 @@ begin
   FItemIdx += 1;
 end;
 
+function TLBjsTreeView.labelHtml(const aText: String): String;
+begin
+  if FLabelsAreHtml then
+    Result := aText
+  else
+    Result := HtmlEncode(aText);
+end;
+
 constructor TLBjsTreeView.Create(anOwner: TJSHTMLElement; isChecked: Boolean; isSingleSelect: Boolean = False; isCheckOnlyLeaf: Boolean = False);
 begin
   inherited Create();
@@ -452,6 +473,7 @@ begin
   FDestElem := anOwner;
   FDestElemId := 'LBTV_' + IntToStr(gv_LBTreeViewItem);
   FChecked := isChecked;
+  FLabelsAreHtml := True;   // comportamento storico: vedi la property LabelsAreHtml
   FCheckOnlyLeaf := isCheckOnlyLeaf;
   FSingleSelect := isSingleSelect;
   // Default False per entrambe: comportamento ORIGINALE invariato finche'
@@ -951,9 +973,9 @@ begin
     _html += '<div class="' + _itemClass + '" data-menu-idx="' + IntToStr(i) + '">';
     if _hasIcons then
       _html += '<span class="LBTVContextMenuIcon ' + _menuItem.IconClass + '" aria-hidden="true"></span>' +
-               '<span class="LBTVContextMenuCaption">' + _menuItem.Caption + '</span>'
+               '<span class="LBTVContextMenuCaption">' + Self.labelHtml(_menuItem.Caption) + '</span>'
     else
-      _html += _menuItem.Caption;
+      _html += Self.labelHtml(_menuItem.Caption);
     _html += '</div>';
   end;
 

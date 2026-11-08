@@ -27,8 +27,18 @@ type
   TJSPOSTRequestAnswer = class(TObject)
     NetworkErr : Boolean;
     NotExecuted : Boolean;
+    // Corpo della risposta, gia' interpretato come JSON (solo per i 2xx).
     Answer : JSValue;
+    // Corpo di una risposta HTTP di errore (4xx/5xx), se e' JSON valido: e'
+    // li' che il server mette il messaggio d'errore. Answer non viene toccato.
+    ErrorAnswer : JSValue;
+    // Codice HTTP ricevuto; 0 se la richiesta non e' arrivata al server
+    // (rete assente, richiesta non eseguita).
+    HttpStatus : Integer;
     function ok(): Boolean;
+    // True se il server ha risposto con un codice di errore (non e' un
+    // problema di rete): distingue per esempio 401/403 da "offline".
+    function HttpError(): Boolean;
   end;
 
   { TJSAsyncPOSTRequest }
@@ -188,10 +198,12 @@ function isCSSLoaded(href: String): Boolean;
        prima del confronto, quindi vale qualunque forma dell'URL ricevuto.
     2. un foglio compare in document.styleSheets solo dopo che il browser
        lo ha scaricato, mentre il <link> esiste nel documento subito dopo
-       appendChild (vedi loadResource): due richieste ravvicinate dello
-       stesso CSS non possono quindi ricaricarlo due volte.
-  La proprieta' .href di un elemento <link> e' gia' risolta in URL assoluto
-  dal browser.
+       appendChild (vedi loadResource).
+  Restituisce True SOLO per un foglio gia' CARICATO (o presente nell'HTML
+  statico). Un foglio il cui <link> esiste ma e' ancora in download da
+  loadResource risulta False: chi poi chiama loadResource riceve la STESSA
+  promessa in corso e la attende, invece di mostrare la pagina priva di
+  stile credendo il foglio disponibile.
 }
 begin
   Result := False;
@@ -200,7 +212,7 @@ begin
     var links = document.querySelectorAll('link[rel="stylesheet"]');
     for (var i = 0; i < links.length; i++) {
       if (links[i].href === wanted) {
-        Result = true;
+        Result = !links[i].hasAttribute('data-lb-pending');
         break;
       }
     }
@@ -208,32 +220,62 @@ begin
 end;
 
 function loadResource(anURL, aType: String; anId: String = ''): TJSPromise;
+{
+  Carica un foglio di stile ('css') o uno script ('js') e restituisce una
+  promessa che si risolve con True/False. Richieste ripetute dello stesso
+  URL condividono la stessa promessa: il file non viene mai aggiunto due
+  volte, e chi arriva mentre e' ancora in download aspetta lo stesso esito.
+  Un caricamento fallito non resta in cache: la richiesta successiva riprova.
+}
 begin
   asm
-    Result = new Promise(function(resolve) {
-      try {
-        let element;
-        if (aType === 'css') {
-          element = document.createElement('link');
-          element.rel = 'stylesheet';
-          element.href = anURL;
-          if (anId) element.id = anId;
-          document.head.appendChild(element);
-        } else if (aType === 'js') {
-          element = document.createElement('script');
-          element.src = anURL;
-          document.body.appendChild(element);
-        } else {
-          resolve(false); // tipo non supportato
-          return;
+    var cache = (globalThis.__lbResourceCache = globalThis.__lbResourceCache || {});
+    var key = aType + '|' + new URL(anURL, document.baseURI).href;
+    if (cache[key]) {
+      Result = cache[key];
+    } else {
+      Result = new Promise(function(resolve) {
+        try {
+          let element;
+          if (aType === 'css') {
+            // gia' presente nell'HTML statico o aggiunto da un'altra via?
+            var wanted = new URL(anURL, document.baseURI).href;
+            var existing = document.querySelectorAll('link[rel="stylesheet"]');
+            for (var i = 0; i < existing.length; i++) {
+              if (existing[i].href === wanted && !existing[i].hasAttribute('data-lb-pending')) {
+                resolve(true);
+                return;
+              }
+            }
+            element = document.createElement('link');
+            element.rel = 'stylesheet';
+            element.href = anURL;
+            element.setAttribute('data-lb-pending', '1');
+            if (anId) element.id = anId;
+            document.head.appendChild(element);
+          } else if (aType === 'js') {
+            element = document.createElement('script');
+            element.src = anURL;
+            document.body.appendChild(element);
+          } else {
+            resolve(false); // tipo non supportato
+            return;
+          }
+          element.onload = function() { element.removeAttribute('data-lb-pending'); resolve(true); };
+          element.onerror = function() {
+            element.removeAttribute('data-lb-pending');
+            delete cache[key];
+            if (element.parentNode) element.parentNode.removeChild(element);
+            resolve(false);
+          };
+        } catch (e) {
+          console.error('Error loading ' + anURL + ': ', e);
+          delete cache[key];
+          resolve(false);
         }
-        element.onload = function() { resolve(true); };
-        element.onerror = function() { resolve(false); };
-      } catch (e) {
-        console.error('Error loading ' + anURL + ': ', e);
-        resolve(false);
-      }
-    });
+      });
+      cache[key] = Result;
+    }
   end;
 end;
 
@@ -243,6 +285,9 @@ begin
   Result := ReplaceStr(Result, '<', '&lt;');
   Result := ReplaceStr(Result, '>', '&gt;');
   Result := ReplaceStr(Result, '"', '&quot;');
+  // L'apice singolo va neutralizzato per i valori inseriti in attributi
+  // delimitati da apici singoli (title='...'). Dentro innerHTML e' innocuo.
+  Result := ReplaceStr(Result, '''', '&#39;');
 end;
 
 function TextToHTML(const aText: String): String;
@@ -344,6 +389,11 @@ begin
   Result := (not NetworkErr) and (not NotExecuted);
 end;
 
+function TJSPOSTRequestAnswer.HttpError(): Boolean;
+begin
+  Result := (HttpStatus >= 400);
+end;
+
 { TJSAsyncPOSTRequest }
 constructor TJSAsyncPOSTRequest.Create;
 begin
@@ -363,6 +413,7 @@ begin
   _Answer := TJSPOSTRequestAnswer.Create;
   _Answer.NetworkErr   := False;
   _Answer.NotExecuted  := True;
+  _Answer.HttpStatus   := 0;
   // 2) Early-exit se manca URI o dati
   if (FData = nil) or (not hasValue(FURI)) or (FURI = '') then
   begin
@@ -390,6 +441,7 @@ begin
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.onload := function(aEvent : TJSProgressEvent): Boolean // procedure(evt: TJSEvent)
         begin
+          _Answer.HttpStatus := xhr.status;
           // Successo HTTP?
           if (xhr.status >= 200) and (xhr.status < 300) then
           begin
@@ -400,7 +452,17 @@ begin
             end;
           end
           else
+          begin
+            // ok() e Answer restano come prima; il corpo dell'errore (di norma
+            // JSON con il messaggio del server) va in ErrorAnswer.
             _Answer.NetworkErr := True;
+            try
+              if xhr.responseText <> '' then
+                _Answer.ErrorAnswer := TJSJSON.parse(xhr.responseText);
+            except
+              // corpo non JSON (es. pagina d'errore del proxy): resta nil
+            end;
+          end;
           resolve(_Answer);
           Result := True;
         end;

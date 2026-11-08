@@ -5,7 +5,7 @@ unit EventsManager;
 interface
 
 uses
-  JS, SysUtils;
+  JS, Web, SysUtils;
 
 type
   TjsEventCallback = reference to procedure(Sender: JSValue);
@@ -143,6 +143,11 @@ begin
         try
           s.Callback(Sender);
         except
+          // L'eccezione non deve interrompere gli altri listener, ma non va
+          // nemmeno persa in silenzio: senza questo log un errore dentro un
+          // handler e' praticamente impossibile da trovare.
+          on E: Exception do
+            console.error('EventsManager: eccezione nel listener di "' + EventName + '": ' + E.Message);
         end;
       end;
     end;

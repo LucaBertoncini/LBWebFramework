@@ -100,6 +100,10 @@ type
     IdField : String;
     ValueField : String;
     DescriptionField : String;
+    // True (come sempre): il testo di DescriptionField e' inserito come HTML.
+    // Impostare False per trattarlo come TESTO (HtmlEncode): da usare quando
+    // le descrizioni arrivano dagli utenti.
+    DescriptionIsHtml : Boolean;
 
     public
       constructor Create; reintroduce;
@@ -138,6 +142,7 @@ type
       function CheckboxFormatter(cell, formatterParams, onRendered: JSValue): JSValue;
       function get_RowCount: Integer;
       function TreeFormatter(cell, formatterParams, onRendered: JSValue): JSValue;
+      function DescriptionText(aNode: TJSObject): String;
       function ValueFormatter(cell, formatterParams, onRendered: JSValue): JSValue;
 
       procedure clearPanel();
@@ -219,7 +224,21 @@ type
 implementation
 
 uses
-  strutils;
+  strutils, uLBWebUtils;
+
+// Argomento stringa per un handler INLINE (onclick="...") dentro un attributo
+// delimitato da doppi apici: prima si protegge la stringa JavaScript
+// (\ e ') e poi l'insieme per l'HTML. Un id con apici o virgolette non puo'
+// quindi chiudere ne' la stringa ne' l'attributo.
+function InlineJsArg(aValue: JSValue): String;
+var
+  _s: String;
+begin
+  _s := String(aValue);
+  _s := ReplaceStr(_s, '\', '\\');
+  _s := ReplaceStr(_s, '''', '\''');
+  Result := '''' + HtmlEncode(_s) + '''';
+end;
 
 var
   gv_RemoveHover : TJSHTMLElement = nil;
@@ -382,6 +401,7 @@ begin
 
   ShowHeaders   := False;
   NeedCheckbox  := False;
+  DescriptionIsHtml := True;
 end;
 
 
@@ -467,6 +487,13 @@ end;
 
 { TTabulator }
 
+function TTabulator.DescriptionText(aNode: TJSObject): String;
+begin
+  Result := String(aNode[FTreeDataOptions.DescriptionField]);
+  if not FTreeDataOptions.DescriptionIsHtml then
+    Result := HtmlEncode(Result);
+end;
+
 function TTabulator.TreeFormatter(cell, formatterParams, onRendered: JSValue): JSValue;
 var
   rowData, node: TJSObject;
@@ -504,19 +531,19 @@ begin
     if FEnableDrag then
     begin
       Result := '<div style="padding-left:' + IntToStr(indent) + 'px;" ' +
-                'draggable="true" ondragstart="window.__tabulators[''' + FPanel.id + '''].loadDraggedRow(event, ' + String(node[FTreeDataOptions.IdField]) + ')">' +
-                '<span class="tree-icon" onclick="window.__tabulators[''' + FPanel.id + '''].ToggleExpand(''' + String(node[FTreeDataOptions.IdField]) + ''')">' +
+                'draggable="true" ondragstart="window.__tabulators[''' + FPanel.id + '''].loadDraggedRow(event, ' + InlineJsArg(node[FTreeDataOptions.IdField]) + ')">' +
+                '<span class="tree-icon" onclick="window.__tabulators[''' + FPanel.id + '''].ToggleExpand(' + InlineJsArg(node[FTreeDataOptions.IdField]) + ')">' +
                   icon +
                 '</span> ' +
-                String(node[FTreeDataOptions.DescriptionField]) +
+                DescriptionText(node) +
               '</div>';
     end
     else begin
       Result := '<div style="padding-left:' + IntToStr(indent) + 'px;" draggable="' + IfThen(FEnableDrag, 'true', 'false') + '">' +
-                '<span class="tree-icon" onclick="window.__tabulators[''' + FPanel.id + '''].ToggleExpand(''' + String(node[FTreeDataOptions.IdField]) + ''')">' +
+                '<span class="tree-icon" onclick="window.__tabulators[''' + FPanel.id + '''].ToggleExpand(' + InlineJsArg(node[FTreeDataOptions.IdField]) + ')">' +
                   icon +
                 '</span> ' +
-                String(node[FTreeDataOptions.DescriptionField]) +
+                DescriptionText(node) +
               '</div>';
     end;
   {$ELSE}
@@ -527,10 +554,12 @@ begin
     else
       icon := '🏷️';
 
-    Result := '<div style="padding-left:' + IntToStr(indent) + 'px; draggable="' + IfThen(FEnableDrag, 'true', 'false') + '">' +
-                '<span class="tree-icon" onclick="window.__tabulators[''' + FPanel.id + '''].ToggleExpand(' + String(node[FTreeDataOptions.IdField]) + ')">' +
+    // (corretto: l'attributo style non veniva chiuso prima di draggable, e
+    // l'id era passato a ToggleExpand senza apici - rotto per gli uuid)
+    Result := '<div style="padding-left:' + IntToStr(indent) + 'px;" draggable="' + IfThen(FEnableDrag, 'true', 'false') + '">' +
+                '<span class="tree-icon" onclick="window.__tabulators[''' + FPanel.id + '''].ToggleExpand(' + InlineJsArg(node[FTreeDataOptions.IdField]) + ')">' +
                   icon +
-                '</span> ' + String(node[FTreeDataOptions.DescriptionField]) + '</div>';
+                '</span> ' + DescriptionText(node) + '</div>';
   end;
  {$ENDIF}
 end;

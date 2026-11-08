@@ -26,6 +26,11 @@ eq('orphan',render('{{/if}}{{else}}',{}),'{{/if}}{{else}}');
 eq('unknown tag',render('{{ a b }}{{!c}}',{}),'{{ a b }}{{!c}}');
 eq('no double pass',render('{{v}}',{v:'{{w}}',w:'X'}),'{{w}}');
 eq('ws in tag',render('{{ #if a }}Y{{ /if }}',{a:1}),'Y');
+eq('attr: a-capo non diventa <br/>',render('<input value="{{v}}">',{v:'a\nb'}),'<input value="a\nb">');
+eq('attr: apice singolo',render("<i title='{{v}}'>",{v:"x'y"}),"<i title='x&#39;y'>");
+eq('testo: a-capo diventa <br/>',render('<p>{{v}}</p>',{v:'a\nb'}),'<p>a<br/>b</p>');
+eq('testo dopo tag chiuso',render('<b>x</b>{{v}}',{v:'a\nb'}),'<b>x</b>a<br/>b');
+eq('attr poi testo',render('<a title="{{t}}">{{t}}</a>',{t:'1\n2'}),'<a title="1\n2">1<br/>2</a>');
 // COMPATIBILITA' con il motore vecchio su tutti i template del progetto che usano solo each a un livello
 // Compatibilita': node test.js <cartella-modelli> [altre...] confronta il motore nuovo con il vecchio sui modelli esistenti
 const dirs=process.argv.slice(2).filter(d=>fs.existsSync(d));
