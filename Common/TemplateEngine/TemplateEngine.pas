@@ -61,8 +61,7 @@ function RenderTemplate(const aTemplate: string; const aData: TJSObject): string
 // Come RenderTemplate, con i frammenti richiamabili da {{> nome}}: aPartials e'
 // un oggetto nome -> testo del modello (per esempio quello restituito da
 // LoadTemplateSections di uLBTemplateLoader). Puo' essere nil.
-function RenderTemplateWithPartials(const aTemplate: string; const aData: TJSObject;
-  const aPartials: TJSObject): string;
+function RenderTemplateWithPartials(const aTemplate: string; const aData: TJSObject; const aPartials: TJSObject): string;
 
 implementation
 
@@ -176,8 +175,7 @@ end;
 // Cerca la chiusura del blocco il cui tag di apertura finisce in aFrom. Tiene
 // conto dei blocchi annidati. aElse = inizio e aElseAfter = fine del {{else}} di
 // primo livello (-1 se manca); aEnd = inizio e aEndAfter = fine del tag di chiusura.
-function FindBlockEnd(const aTpl: string; aFrom: NativeInt;
-  out aElse, aElseAfter, aEnd, aEndAfter: NativeInt): Boolean;
+function FindBlockEnd(const aTpl: string; aFrom: NativeInt; out aElse, aElseAfter, aEnd, aEndAfter: NativeInt): Boolean;
 var
   _Depth: Integer;
   _Pos, _Open, _Close: NativeInt;
@@ -220,12 +218,10 @@ begin
   end;
 end;
 
-function RenderScoped(const aTpl: string; aScopes: TJSArray; const aPartials: TJSObject;
-  aDepth: Integer): string; forward;
+function RenderScoped(const aTpl: string; aScopes: TJSArray; const aPartials: TJSObject; aDepth: Integer): string; forward;
 
 // Rende un blocco (each / if / unless) gia' delimitato.
-function RenderBlock(const aKind, aArg, aBody, aElseBody: string; aHasElse: Boolean;
-  aScopes: TJSArray; const aPartials: TJSObject; aDepth: Integer): string;
+function RenderBlock(const aKind, aArg, aBody, aElseBody: string; aHasElse: Boolean; aScopes: TJSArray; const aPartials: TJSObject; aDepth: Integer): string;
 var
   _Value: JSValue;
   _Arr: TJSArray;
@@ -265,8 +261,7 @@ begin
   end;
 end;
 
-function RenderScoped(const aTpl: string; aScopes: TJSArray; const aPartials: TJSObject;
-  aDepth: Integer): string;
+function RenderScoped(const aTpl: string; aScopes: TJSArray; const aPartials: TJSObject; aDepth: Integer): string;
 var
   _Pos, _Open, _Close, _After: NativeInt;
   _ElseAt, _ElseAfter, _EndAt, _EndAfter: NativeInt;
@@ -384,8 +379,7 @@ begin
   end;
 end;
 
-function RenderTemplateWithPartials(const aTemplate: string; const aData: TJSObject;
-  const aPartials: TJSObject): string;
+function RenderTemplateWithPartials(const aTemplate: string; const aData: TJSObject; const aPartials: TJSObject): string;
 var
   _Scopes: TJSArray;
 begin

@@ -271,7 +271,7 @@ type
   TPageManager = class(TObject)
   strict private
     FOnValidatePage : TOnValidatePageEvent;
-    FOnPageLoaded   : TOnPageLoadedEvent; // NUOVO
+    FOnPageLoaded   : TOnPageLoadedEvent;
 
     FContainer: TJSHTMLElement;
     FFormRegistrations: TJSMap;
@@ -287,6 +287,10 @@ type
     // True solo per il caricamento iniziale (StartRouting): abilita il
     // ripiego sulla prima rotta se quella dell'indirizzo non esiste.
     FInitialLoad : Boolean;
+    // Rotta EFFETTIVA della pagina mostrata (dopo l'eventuale trasformazione di OnValidatePage); vuota prima della prima pagina.
+    FCurrentRoute : String;
+    // Vedi la proprieta' ReplaceNext.
+    FReplaceNext : Boolean;
 
     function FirstRegisteredRoute: String;
     function HandlePopState(event: TJSPopStateEvent): Boolean;
@@ -296,8 +300,8 @@ type
     { Restituisce l'INTERA registrazione scelta per la rotta, non la sola
       classe: servono anche il file del template e la cartella radice,
       dichiarati insieme ad essa. La logica di scelta fra piu'
-      registrazioni della stessa rotta (quella per dimensione dello
-      schermo) e' rimasta identica. }
+      registrazioni della stessa rotta è quella per dimensione dello
+      schermo }
     function GetBestRegistration(aRoute: String): TJSObject;
 
   public
@@ -323,11 +327,16 @@ type
     procedure Back();
 
     property CurrentForm: TBaseForm read FCurrentForm;
+    property CurrentRoute: String read FCurrentRoute;
+
+    { True: la PROSSIMA NavigateTo SOSTITUISCE la voce di cronologia attuale invece di aggiungerne una (history.replaceState al posto di
+      pushState). E' l'equivalente di "indietro" seguito da NavigateTo, ma senza passare dalla pagina precedente: serve a chi cambia
+      SEZIONE (voce di un menu di navigazione) e non vuole che ogni scelta allunghi la cronologia. Vale per UNA sola navigazione: LoadPage lo
+      legge subito e lo azzera, anche se poi la navigazione viene ignorata (punto 7). Chi lo imposta deve riazzerarlo se non e' certo che
+      una navigazione parta (try/finally). }
+    property ReplaceNext: Boolean read FReplaceNext write FReplaceNext;
 
     property OnValidatePage: TOnValidatePageEvent write FOnValidatePage;
-    // NUOVO: write-only, stesso stile di OnValidatePage sopra - il
-    // chiamante (la classe derivata da TWebApplication) assegna un handler, non legge mai
-    // indietro il valore assegnato.
     property OnPageLoaded: TOnPageLoadedEvent write FOnPageLoaded;
   end;
 
@@ -342,6 +351,8 @@ begin
   FIsNavigating := False;
   FPendingPopRoute := '';
   FInitialLoad := False;
+  FCurrentRoute := '';
+  FReplaceNext := False;
   FContainer := aContainer;
   FFormRegistrations := TJSMap.new;
   FCurrentForm := nil;
@@ -493,9 +504,13 @@ var
   _Requested : String;
   _Initial : Boolean;
   _Fallback : String;
+  _Replace : Boolean;
 begin
   _Initial := FInitialLoad;
   FInitialLoad := False;
+  // Letto e azzerato PRIMA di qualunque uscita: vale per questa sola richiesta, anche se viene ignorata perche' un'altra e' in corso.
+  _Replace := FReplaceNext;
+  FReplaceNext := False;
 
   if FIsNavigating then
   begin
@@ -598,6 +613,7 @@ begin
         // di TWebComponent (vedi WebComponent.pas), quindi va invocata qui
         // esplicitamente, subito dopo la creazione dell'istanza.
         FCurrentForm.BindUI;
+        FCurrentRoute := aRoute;
 
         if aPushState then
         begin
@@ -605,8 +621,9 @@ begin
           _State.Properties['page'] := aRoute;
           // Navigare verso la rotta GIA' mostrata nell'indirizzo ricarica la
           // pagina ma non deve aggiungere una voce uguale alla precedente
-          // (costringerebbe a premere due volte "indietro").
-          if window.location.hash.substring(1) = aRoute then
+          // (costringerebbe a premere due volte "indietro"). Stessa cosa quando il chiamante
+          // ha chiesto di sostituire la voce attuale (ReplaceNext).
+          if _Replace or (window.location.hash.substring(1) = aRoute) then
             window.history.replaceState(_State, aRoute, '#' + aRoute)
           else
             window.history.pushState(_State, aRoute, '#' + aRoute);

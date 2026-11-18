@@ -3,562 +3,627 @@
 `TemplateEngine.RenderTemplate(aTemplate, aData)` trasforma un modello HTML (testo) e un oggetto dati in HTML.
 Ogni valore `{{campo}}` passa da `TextToHTML`: il testo dell'utente non diventa mai markup.
 
+Questa guida mostra il flusso completo per ogni caso:
+
+1. il file template HTML;
+2. i dati da passare, prima in JSON e poi nella costruzione equivalente con `TJSObject` e `TJSArray`;
+3. la chiamata Pascal che carica e processa quel file;
+4. l'HTML prodotto;
+5. la corrispondenza fra chiavi e segnaposto.
+
+Gli esempi sono indipendenti e ordinati per difficoltà crescente. I blocchi Pascal vanno eseguiti dentro un metodo `async` e presuppongono:
+
+```pascal
+uses
+  JS, Web, TemplateEngine, uLBTemplateLoader;
+```
+
+Negli esempi, `FOutputEl` è l'elemento della pagina nel quale inserire l'HTML già renderizzato. Il template viene sempre caricato come **testo**, processato e soltanto dopo assegnato a `innerHTML`.
+
 ## Riferimento rapido
 
 | Sintassi | Significato |
 |---|---|
-| `{{campo}}`, `{{oggetto.campo}}` | valore con escape; percorso con punti |
-| `{{{campo}}}` | valore **senza** escape: solo per HTML prodotto dall'applicazione |
-| `{{this}}` | l'elemento corrente (elenchi di stringhe/numeri) |
-| `{{../campo}}` | campo dell'ambito genitore (`../../` per due livelli) |
-| `{{#each elenco}}...{{/each}}` | ciclo; annidabile |
-| `{{#each elenco}}...{{else}}...{{/each}}` | `else` se l'elenco e' vuoto o assente |
-| `{{#if campo}}...{{else}}...{{/if}}` | condizione; `else` facoltativo |
-| `{{#unless campo}}...{{else}}...{{/unless}}` | condizione negata |
-| `{{> nome}}` | frammento (partial) con lo stesso ambito: per le strutture ricorsive |
+| `{{campo}}` | Legge `campo` dall'oggetto dati ed esegue l'escape HTML. |
+| `{{oggetto.campo}}` | Legge un valore seguendo un percorso annidato. |
+| `{{{campo}}}` | Inserisce il valore senza escape. Usare solo HTML sicuro prodotto dall'applicazione. |
+| `{{this}}` | Indica l'elemento corrente in un `#each`, utile per array di stringhe o numeri. |
+| `{{../campo}}` | Legge `campo` dall'ambito genitore. Ogni ulteriore `../` risale di un livello. |
+| `{{#if campo}}...{{else}}...{{/if}}` | Sceglie un ramo in base al valore di `campo`. `else` è facoltativo. |
+| `{{#unless campo}}...{{else}}...{{/unless}}` | Come `#if`, ma esegue il primo ramo quando il valore è falso. |
+| `{{#each elenco}}...{{else}}...{{/each}}` | Ripete il blocco per ogni elemento. `else` viene usato se l'array è vuoto o assente. |
+| `{{> nome}}` | Renderizza il partial chiamato `nome` nello stesso ambito corrente. |
 
-**Falso** (per `#if` / `#unless`): campo assente, `null`, `false`, `0`, `''` e array vuoto. Tutto il resto e' vero
-(compresa la stringa `'false'`).
+Per `#if` e `#unless` sono falsi: campo assente, `null`, `false`, `0`, stringa vuota e array vuoto. Tutto il resto è vero, compresa la stringa `'false'`.
 
-## Uso dal Pascal
+Regole importanti:
+
+- passare valori **grezzi**: non chiamare `TextToHTML` prima del rendering, altrimenti il testo viene codificato due volte;
+- usare booleani e numeri reali, per esempio `True` e `12`, non stringhe che li rappresentano;
+- un campo mancante produce una stringa vuota;
+- fuori da un tag HTML, `{{campo}}` usa `TextToHTML`; dentro un tag, per esempio `title="{{campo}}"`, usa `HtmlEncode` senza trasformare gli a-capo in `<br/>`;
+- i blocchi e i partial possono essere annidati fino a una profondità massima di 32;
+- `LoadTemplate` e `LoadTemplateSections` conservano in cache i file caricati con successo. `ClearTemplateCache` svuota la cache.
+
+---
+
+## 1. Valore semplice
+
+Obiettivo: inserire un solo valore testuale in un titolo.
+
+### 1.1 File template HTML
+
+File `pages/hello.html` completo:
+
+```html
+<h1>Ciao {{name}}</h1>
+```
+
+### 1.2 Dati da passare
+
+Struttura logica/JSON esatta:
+
+```json
+{
+  "name": "Luca & Co."
+}
+```
+
+Costruzione equivalente in Pascal:
 
 ```pascal
-uses TemplateEngine, uLBTemplateLoader;
+_Data := TJSObject.new;
+_Data.Properties['name'] := 'Luca & Co.';
+```
 
+### 1.3 Caricamento e rendering in Pascal
+
+```pascal
 var
-  _Tpl  : String;
-  _Data : TJSObject;
+  _Template : String;
+  _Data     : TJSObject;
+  _Html     : String;
 begin
-  _Tpl := AWait(String, LoadTemplate('pages/group-row.html'));   // testo, con cache
   _Data := TJSObject.new;
-  _Data.Properties['rows'] := _Items;                                       // TJSArray di TJSObject
-  FListEl.innerHTML := TemplateEngine.RenderTemplate(_Tpl, _Data);
+  _Data.Properties['name'] := 'Luca & Co.';
+
+  _Template := AWait(String, LoadTemplate('pages/hello.html'));
+  _Html := TemplateEngine.RenderTemplate(_Template, _Data);
+  FOutputEl.innerHTML := _Html;
 end;
 ```
 
-Con i frammenti ricorsivi (`LoadTemplateSections` legge un file con piu' modelli separati da `<!-- @nome -->`):
-
-```pascal
-_Parts := AWait(TJSObject, LoadTemplateSections('pages/tree.html'));
-FListEl.innerHTML := TemplateEngine.RenderTemplateWithPartials(
-  String(_Parts.Properties['tree']), _Data, _Parts);
-```
-
-Regole pratiche:
-- Passare i valori **grezzi**: il motore fa gia' l'escape (se si passa `TextToHTML(x)` si ottiene una doppia codifica, `&` diventa `&amp;`).
-- Booleani e numeri si passano com'e': `Properties['can_join'] := True`, non `'hidden'` o `''`.
-- Un modello con segnaposto dentro i tag (`data-id="{{id}}"`) va letto come **testo** (`fetch` + `.text()`, o `LoadTemplate`)
-  e reso prima di toccare il DOM: il parser HTML del browser lo deformerebbe.
-- Dentro un tag (`value="{{note}}"`, `title="{{x}}"`) l'escape e' quello per gli attributi: `& < > " '` e **nessuna** conversione degli a-capo in `<br/>`.
-  Il riconoscimento guarda il testo gia' prodotto nello stesso blocco: un tag aperto in un blocco e chiuso in un altro (`{{#if}}` dentro il tag) non e' riconosciuto.
-- `LoadTemplate` e `LoadTemplateSections` stanno in `uLBTemplateLoader` (cartella TemplateEngine).
-- `else` e i nomi che iniziano con `/` o `#` sono riservati; un tag che non si capisce resta nel testo cosi' com'e'.
-
-## Esempio completo: albero ricorsivo (HTML, dati e Pascal)
-
-Esempio: un albero (radice, rami, foglie) con una casella per ogni nodo. Ogni nodo puo' avere
-dei figli, che a loro volta ne hanno: il numero di livelli non e' noto in anticipo, quindi serve un modello che richiami se stesso.
-
-### 1. Il file HTML: ogni pezzo ha un NOME
-
-Un solo file, `pages/tree.html`, con **piu' modelli**. Ognuno inizia con una riga
-`<!-- @nome -->`: **il nome dopo la `@` e' l'identificativo con cui il Pascal e gli altri modelli ritrovano quel pezzo**.
-Senza nome un frammento non si puo' ne' scegliere dal Pascal ne' richiamare con `{{> nome}}`.
+### 1.4 HTML risultante
 
 ```html
-<!-- @tree -->
-<ul class="tree-root">{{#each nodes}}{{> node}}{{/each}}</ul>
-
-<!-- @node -->
-<li class="tree-node" data-uuid="{{uuid}}">
-  <div class="tree-row">
-    <input type="checkbox" class="tree-chk" data-uuid="{{uuid}}" {{checked}}>
-    <span class="tree-name">{{name}}</span>
-    {{#if code}}<span class="tree-code">({{code}})</span>{{/if}}
-  </div>
-  {{#if children}}
-  <ul class="tree-nested">{{#each children}}{{> node}}{{/each}}</ul>
-  {{/if}}
-</li>
+<h1>Ciao Luca &amp; Co.</h1>
 ```
 
-Come si legge:
-- `tree` e' il punto di ingresso: lo sceglie il Pascal. Contiene l'elenco dei nodi radice e, per ognuno, rimanda a `node`.
-- `node` e' il disegno di UN nodo. Dentro, `{{#each children}}{{> node}}{{/each}}` dice: "per ogni figlio, ridisegna questo stesso modello".
-  La ricorsione finisce da sola: un nodo senza figli ha `children` vuoto, quindi `{{#if children}}` e' falso e il ramo non viene aperto.
-- `{{> node}}` e' un richiamo **per nome**: se il nome non esiste tra i frammenti passati al motore, quel punto resta vuoto (nessun errore).
-- Le due parole `tree` e `node` le scegli tu; devono solo coincidere tra le righe `<!-- @... -->`, i `{{> ...}}` e il Pascal.
-- I modelli hanno segnaposto dentro i tag (`data-uuid="{{uuid}}"`): il file va letto come **testo**, mai inserito nella pagina cosi' com'e'.
-  Gli a capo e i rientri del modello finiscono nell'HTML prodotto; sono innocui (un elenco `<ul>` ignora gli spazi tra gli elementi).
+### 1.5 Corrispondenza fra dati e segnaposto
 
-### 2. La struttura dati
+La chiave `name` dell'oggetto `_Data` riempie `{{name}}`. Il valore viene passato come `Luca & Co.`; è il motore a trasformare `&` in `&amp;`.
 
-Il server restituisce un elenco **piatto**, un record per nodo, con il riferimento al padre:
+---
+
+## 2. Oggetto annidato
+
+Obiettivo: leggere proprietà contenute in oggetti a più livelli.
+
+### 2.1 File template HTML
+
+File `pages/product-card.html` completo:
+
+```html
+<article class="product-card">
+  <h2>{{product.name}}</h2>
+  <p>Codice: {{product.code}}</p>
+  <p>Produttore: {{product.manufacturer.name}}</p>
+</article>
+```
+
+### 2.2 Dati da passare
+
+Struttura logica/JSON esatta:
 
 ```json
-[
-  {
-    "uuid": "u1",
-    "parent_uuid": null,
-    "name": "Radice",
-    "code": "R",
-    "checked": ""
-  },
-  {
-    "uuid": "u2",
-    "parent_uuid": "u1",
-    "name": "Ramo 1",
-    "code": "B1",
-    "checked": ""
-  },
-  {
-    "uuid": "u3",
-    "parent_uuid": "u2",
-    "name": "Foglia <A&B>",
-    "code": "",
-    "checked": ""
-  },
-  {
-    "uuid": "u4",
-    "parent_uuid": "u1",
-    "name": "Ramo 2",
-    "code": "B2",
-    "checked": "checked"
+{
+  "product": {
+    "name": "Pompa <Pro>",
+    "code": "P-100",
+    "manufacturer": {
+      "name": "Idro & Figli"
+    }
   }
-]
+}
 ```
 
-Prima del rendering servono due preparazioni, entrambe in Pascal:
-1. **annidare**: ogni nodo riceve un array `children` con i propri figli (e i nodi senza padre diventano le radici);
-2. **marcare**: ogni nodo riceve `checked` = `'checked'` oppure `''` (e' il testo che finisce nell'attributo della casella).
-
-Dopo le due preparazioni il motore riceve l'oggetto `{ "nodes": [ ...radici... ] }`:
-
-```json
-{ "nodes": [
-    {
-      "uuid": "u1",
-      "parent_uuid": null,
-      "name": "Radice",
-      "code": "R",
-      "children": [
-        {
-          "uuid": "u2",
-          "parent_uuid": "u1",
-          "name": "Ramo 1",
-          "code": "B1",
-          "children": [
-            {
-              "uuid": "u3",
-              "parent_uuid": "u2",
-              "name": "Foglia <A&B>",
-              "code": "",
-              "children": [],
-              "checked": ""
-            }
-          ],
-          "checked": ""
-        },
-        {
-          "uuid": "u4",
-          "parent_uuid": "u1",
-          "name": "Ramo 2",
-          "code": "B2",
-          "children": [],
-          "checked": "checked"
-        }
-      ],
-      "checked": ""
-    }
-  ] }
-```
-
-I campi usati dal modello sono `uuid`, `name`, `code`, `checked` e `children`. Gli altri (come `parent_uuid`) sono ignorati.
-I valori vanno passati **grezzi** (`Foglia <A&B>`): l'escape lo fa il motore.
-
-### 3. L'uso in Pascal
+Costruzione equivalente in Pascal:
 
 ```pascal
-uses
-  JS, Web, SysUtils, TemplateEngine, uLBTemplateLoader;
+_Manufacturer := TJSObject.new;
+_Manufacturer.Properties['name'] := 'Idro & Figli';
 
-const
-  cTreeTemplatePath = 'pages/tree.html';
+_Product := TJSObject.new;
+_Product.Properties['name'] := 'Pompa <Pro>';
+_Product.Properties['code'] := 'P-100';
+_Product.Properties['manufacturer'] := _Manufacturer;
 
-// 1. annidare: dall'elenco piatto alla foresta (ogni nodo con il suo array 'children')
-procedure NestFlatList(aFlat, aForest: TJSArray);
+_Data := TJSObject.new;
+_Data.Properties['product'] := _Product;
+```
+
+### 2.3 Caricamento e rendering in Pascal
+
+```pascal
 var
-  _Map    : TJSMap;
-  i       : Integer;
-  _Item   : TJSObject;
-  _Parent : TJSObject;
-  _PKey   : String;
+  _Template     : String;
+  _Data         : TJSObject;
+  _Product      : TJSObject;
+  _Manufacturer : TJSObject;
+  _Html         : String;
 begin
-  _Map := TJSMap.new;
-  for i := 0 to aFlat.Length - 1 do
-  begin
-    _Item := TJSObject(aFlat.Elements[i]);
-    _Item.Properties['children'] := TJSArray.new;
-    _Map.&set(String(_Item.Properties['uuid']), _Item);
-  end;
-  for i := 0 to aFlat.Length - 1 do
-  begin
-    _Item := TJSObject(aFlat.Elements[i]);
-    if hasValue(_Item.Properties['parent_uuid']) then
-    begin
-      _PKey := String(_Item.Properties['parent_uuid']);
-      if _Map.has(_PKey) then
-      begin
-        _Parent := TJSObject(_Map.get(_PKey));
-        TJSArray(_Parent.Properties['children']).push(_Item);
-        Continue;
-      end;
-    end;
-    aForest.push(_Item);
-  end;
-end;
+  _Manufacturer := TJSObject.new;
+  _Manufacturer.Properties['name'] := 'Idro & Figli';
 
-// 2. marcare: 'checked' sui nodi presenti nell'insieme dei nodi spuntati (ricorsiva)
-procedure MarkChecked(aForest: TJSArray; aCheckedSet: TJSObject);
-var
-  i     : Integer;
-  _Item : TJSObject;
-begin
-  for i := 0 to aForest.Length - 1 do
-  begin
-    _Item := TJSObject(aForest.Elements[i]);
-    if aCheckedSet.hasOwnProperty(String(_Item.Properties['uuid'])) then
-      _Item.Properties['checked'] := 'checked'
-    else
-      _Item.Properties['checked'] := '';
-    MarkChecked(TJSArray(_Item.Properties['children']), aCheckedSet);
-  end;
-end;
-
-// 3. rendering: un solo passaggio per tutto l'albero
-procedure TTreeDialog.RenderTree(aFlat: TJSArray; aCheckedSet: TJSObject);
-var
-  _Parts  : TJSObject;   // nome -> testo del modello: { tree: '...', node: '...' }
-  _Forest : TJSArray;
-  _Data   : TJSObject;
-begin
-  _Parts := AWait(TJSObject, LoadTemplateSections(cTreeTemplatePath));   // il file, spezzato per nome
-  if not _Parts.hasOwnProperty('tree') then
-  begin
-    Self.ShowError('Impossibile caricare il modello dell''albero.');
-    Exit;
-  end;
-
-  _Forest := TJSArray.new;
-  NestFlatList(aFlat, _Forest);
-  MarkChecked(_Forest, aCheckedSet);
+  _Product := TJSObject.new;
+  _Product.Properties['name'] := 'Pompa <Pro>';
+  _Product.Properties['code'] := 'P-100';
+  _Product.Properties['manufacturer'] := _Manufacturer;
 
   _Data := TJSObject.new;
-  _Data.Properties['nodes'] := _Forest;                                  // il nome usato in {{#each nodes}}
+  _Data.Properties['product'] := _Product;
 
-  FListEl.innerHTML := TemplateEngine.RenderTemplateWithPartials(
-    String(_Parts.Properties['tree']),     // da quale modello partire
-    _Data,                                  // i dati
-    _Parts);                                // i frammenti richiamabili con {{> nome}}
+  _Template := AWait(String, LoadTemplate('pages/product-card.html'));
+  _Html := TemplateEngine.RenderTemplate(_Template, _Data);
+  FOutputEl.innerHTML := _Html;
 end;
 ```
 
-Tre punti da ricordare:
-- il **terzo argomento** (`_Parts`) e' cio' che permette a `{{> node}}` di trovare `node`; dimenticarlo (o passare `nil`) lascia l'albero vuoto dopo le radici;
-- `LoadTemplateSections` scarica il file una volta (cache) e lo spezza in un oggetto `nome -> testo`; lo stesso oggetto serve da elenco dei frammenti;
-- la chiave `nodes` dei dati e il nome in `{{#each nodes}}` sono la stessa parola, come `children`.
-
-### 4. Il risultato
-
-Con i dati di sopra (e `u4` tra i nodi spuntati) l'HTML prodotto e':
+### 2.4 HTML risultante
 
 ```html
-<ul class="tree-root"><li class="tree-node" data-uuid="u1">
-  <div class="tree-row">
-    <input type="checkbox" class="tree-chk" data-uuid="u1" >
-    <span class="tree-name">Radice</span>
-    <span class="tree-code">(R)</span>
-  </div>
-  
-  <ul class="tree-nested"><li class="tree-node" data-uuid="u2">
-  <div class="tree-row">
-    <input type="checkbox" class="tree-chk" data-uuid="u2" >
-    <span class="tree-name">Ramo 1</span>
-    <span class="tree-code">(B1)</span>
-  </div>
-  
-  <ul class="tree-nested"><li class="tree-node" data-uuid="u3">
-  <div class="tree-row">
-    <input type="checkbox" class="tree-chk" data-uuid="u3" >
-    <span class="tree-name">Foglia &lt;A&amp;B&gt;</span>
-    
-  </div>
-  
-</li></ul>
-  
-</li><li class="tree-node" data-uuid="u4">
-  <div class="tree-row">
-    <input type="checkbox" class="tree-chk" data-uuid="u4" checked>
-    <span class="tree-name">Ramo 2</span>
-    <span class="tree-code">(B2)</span>
-  </div>
-  
-</li></ul>
-  
-</li></ul>
+<article class="product-card">
+  <h2>Pompa &lt;Pro&gt;</h2>
+  <p>Codice: P-100</p>
+  <p>Produttore: Idro &amp; Figli</p>
+</article>
 ```
 
-Il nome con `<A&B>` esce correttamente protetto, e solo `u4` ha `checked`.
+### 2.5 Corrispondenza fra dati e segnaposto
 
-## Esempi (l'output e' quello prodotto dal motore)
+- `{{product.name}}` segue `_Data['product']` e poi `['name']`.
+- `{{product.code}}` segue `_Data['product']` e poi `['code']`.
+- `{{product.manufacturer.name}}` attraversa tre livelli: `product`, `manufacturer`, `name`.
 
-### 1. Badge facoltativo (prima: segnaposto `*_hidden` + `HiddenClass` nel Pascal)
+Anche qui i valori sono grezzi: `<Pro>` e `&` vengono protetti dal motore.
 
-Modello:
+---
+
+## 3. Condizione `if/else`
+
+Obiettivo: produrre markup diverso in base a un booleano.
+
+### 3.1 File template HTML
+
+File `pages/account-status.html` completo:
 
 ```html
-<span class="admin-row-title">{{name}}</span>
-{{#if inactive}}<span class="admin-badge admin-badge-inactive">Non attivo</span>{{/if}}
+<div class="status">{{#if active}}<span class="ok">Attivo</span>{{else}}<span class="ko">Non attivo</span>{{/if}}</div>
 ```
 
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
+### 3.2 Dati da passare
+
+Struttura logica/JSON esatta:
 
 ```json
 {
-  "name": "Manutentori",
-  "inactive": true
+  "active": false
 }
 ```
 
-Risultato:
+Costruzione equivalente in Pascal:
+
+```pascal
+_Data := TJSObject.new;
+_Data.Properties['active'] := False;
+```
+
+### 3.3 Caricamento e rendering in Pascal
+
+```pascal
+var
+  _Template : String;
+  _Data     : TJSObject;
+  _Html     : String;
+begin
+  _Data := TJSObject.new;
+  _Data.Properties['active'] := False;
+
+  _Template := AWait(String, LoadTemplate('pages/account-status.html'));
+  _Html := TemplateEngine.RenderTemplate(_Template, _Data);
+  FOutputEl.innerHTML := _Html;
+end;
+```
+
+### 3.4 HTML risultante
 
 ```html
-<span class="admin-row-title">Manutentori</span>
-<span class="admin-badge admin-badge-inactive">Non attivo</span>
+<div class="status"><span class="ko">Non attivo</span></div>
 ```
 
-### 2. Due varianti con `else` (membri / non attivo)
+### 3.5 Corrispondenza fra dati e segnaposto
 
-Modello:
+`{{#if active}}` legge la chiave booleana `active`. Poiché vale `False`, il motore ignora il primo ramo e renderizza il contenuto compreso fra `{{else}}` e `{{/if}}`. Impostando la stessa chiave a `True`, il risultato conterrebbe invece `<span class="ok">Attivo</span>`.
+
+---
+
+## 4. Ciclo `each`
+
+Obiettivo: generare un elemento `<li>` per ogni stringa contenuta in un array.
+
+### 4.1 File template HTML
+
+File `pages/tag-list.html` completo:
 
 ```html
-{{#if is_active}}<span class="admin-badge">{{members}} membri</span>{{else}}<span class="admin-badge admin-badge-inactive">Non attivo</span>{{/if}}
+<ul class="tags">
+  {{#each tags}}<li>{{this}}</li>{{else}}<li class="empty">Nessuna etichetta</li>{{/each}}
+</ul>
 ```
 
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
+### 4.2 Dati da passare
 
-```json
-{
-  "is_active": false,
-  "members": 4
-}
-```
-
-Risultato:
-
-```html
-<span class="admin-badge admin-badge-inactive">Non attivo</span>
-```
-
-### 3. Elenco vuoto senza segnaposto di appoggio (prima: `no_participants_hidden`)
-
-Modello:
-
-```html
-<ul>{{#each participants}}<li>{{username}}</li>{{else}}<li class="muted">Nessun partecipante.</li>{{/each}}</ul>
-```
-
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
-
-```json
-{
-  "participants": []
-}
-```
-
-Risultato:
-
-```html
-<ul><li class="muted">Nessun partecipante.</li></ul>
-```
-
-### 4. Condizione dentro un ciclo (pulsanti per riga)
-
-Modello:
-
-```html
-{{#each orders}}<div class="admin-row">n. {{num}}
-  {{#if can_join}}<button data-action="join" data-uuid="{{uuid}}">Partecipa</button>{{/if}}
-  {{#if can_cancel}}<button data-action="cancel" data-uuid="{{uuid}}">Annulla</button>{{/if}}
-</div>{{/each}}
-```
-
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
-
-```json
-{
-  "orders": [
-    {
-      "num": 12,
-      "uuid": "a1",
-      "can_join": true,
-      "can_cancel": false
-    },
-    {
-      "num": 13,
-      "uuid": "b2",
-      "can_join": false,
-      "can_cancel": true
-    }
-  ]
-}
-```
-
-Risultato:
-
-```html
-<div class="admin-row">n. 12
-  <button data-action="join" data-uuid="a1">Partecipa</button>
-  
-</div><div class="admin-row">n. 13
-  
-  <button data-action="cancel" data-uuid="b2">Annulla</button>
-</div>
-```
-
-### 5. Cicli annidati: blocchi del riepilogo, ognuno con le sue righe
-
-Modello:
-
-```html
-{{#each blocks}}<div class="stat-block"><h4>{{title}}</h4>
-{{#each rows}}  <div class="stat-bar-row"><span class="nm">{{label}}</span><span class="n">{{n}}</span></div>
-{{/each}}</div>{{/each}}
-```
-
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
-
-```json
-{
-  "blocks": [
-    {
-      "title": "Per tipologia",
-      "rows": [
-        {
-          "label": "A - Categoria A",
-          "n": 12
-        },
-        {
-          "label": "B - Categoria B",
-          "n": 7
-        }
-      ]
-    },
-    {
-      "title": "Per mese",
-      "rows": [
-        {
-          "label": "2026-09",
-          "n": 9
-        }
-      ]
-    }
-  ]
-}
-```
-
-Risultato:
-
-```html
-<div class="stat-block"><h4>Per tipologia</h4>
-  <div class="stat-bar-row"><span class="nm">A - Categoria A</span><span class="n">12</span></div>
-  <div class="stat-bar-row"><span class="nm">B - Categoria B</span><span class="n">7</span></div>
-</div><div class="stat-block"><h4>Per mese</h4>
-  <div class="stat-bar-row"><span class="nm">2026-09</span><span class="n">9</span></div>
-</div>
-```
-
-### 6. `../` per leggere un campo del livello superiore
-
-Modello:
-
-```html
-{{#each groups}}<h4>{{name}} ({{../asset}})</h4>{{/each}}
-```
-
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
-
-```json
-{
-  "asset": "Elemento 4",
-  "groups": [
-    {
-      "name": "Gruppo A"
-    },
-    {
-      "name": "Gruppo B"
-    }
-  ]
-}
-```
-
-Risultato:
-
-```html
-<h4>Gruppo A (Elemento 4)</h4><h4>Gruppo B (Elemento 4)</h4>
-```
-
-### 7. Elenco di stringhe con `{{this}}`
-
-Modello:
-
-```html
-{{#each tags}}<span class="chip">{{this}}</span>{{/each}}
-```
-
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
+Struttura logica/JSON esatta:
 
 ```json
 {
   "tags": [
     "urgente",
-    "fermo macchina"
+    "fermo & manutenzione"
   ]
 }
 ```
 
-Risultato:
+Costruzione equivalente in Pascal:
 
-```html
-<span class="chip">urgente</span><span class="chip">fermo macchina</span>
+```pascal
+_Tags := TJSArray.new;
+_Tags.push('urgente');
+_Tags.push('fermo & manutenzione');
+
+_Data := TJSObject.new;
+_Data.Properties['tags'] := _Tags;
 ```
 
-### 8. Albero ricorsivo con un frammento (prima: DOM composto in Pascal)
+### 4.3 Caricamento e rendering in Pascal
 
-Modello:
+```pascal
+var
+  _Template : String;
+  _Data     : TJSObject;
+  _Tags     : TJSArray;
+  _Html     : String;
+begin
+  _Tags := TJSArray.new;
+  _Tags.push('urgente');
+  _Tags.push('fermo & manutenzione');
 
-```html
-<ul class="tree-root">{{#each nodes}}{{> node}}{{/each}}</ul>
+  _Data := TJSObject.new;
+  _Data.Properties['tags'] := _Tags;
+
+  _Template := AWait(String, LoadTemplate('pages/tag-list.html'));
+  _Html := TemplateEngine.RenderTemplate(_Template, _Data);
+  FOutputEl.innerHTML := _Html;
+end;
 ```
 
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
+### 4.4 HTML risultante
+
+```html
+<ul class="tags">
+  <li>urgente</li><li>fermo &amp; manutenzione</li>
+</ul>
+```
+
+### 4.5 Corrispondenza fra dati e segnaposto
+
+`{{#each tags}}` legge l'array associato alla chiave `tags`. A ogni iterazione l'ambito corrente è una singola stringa, quindi `{{this}}` inserisce quella stringa. Se `tags` fosse `[]` o mancasse, verrebbe prodotto `<li class="empty">Nessuna etichetta</li>`.
+
+---
+
+## 5. Tabella con righe
+
+Obiettivo: passare un array di oggetti e produrre una riga `<tr>` per ogni oggetto.
+
+### 5.1 File template HTML
+
+File `pages/products-table.html` completo:
+
+```html
+<table class="products">
+  <thead><tr><th>Codice</th><th>Descrizione</th><th>Quantità</th></tr></thead>
+  <tbody>
+    {{#each rows}}<tr data-id="{{id}}"><td>{{code}}</td><td>{{description}}</td><td>{{quantity}}</td></tr>{{else}}<tr><td colspan="3">Nessun prodotto</td></tr>{{/each}}
+  </tbody>
+</table>
+```
+
+### 5.2 Dati da passare
+
+Struttura logica/JSON esatta:
+
+```json
+{
+  "rows": [
+    {
+      "id": 101,
+      "code": "P-100",
+      "description": "Pompa & filtro",
+      "quantity": 2
+    },
+    {
+      "id": 102,
+      "code": "V-200",
+      "description": "Valvola <inox>",
+      "quantity": 5
+    }
+  ]
+}
+```
+
+Costruzione equivalente in Pascal:
+
+```pascal
+_Row1 := TJSObject.new;
+_Row1.Properties['id'] := 101;
+_Row1.Properties['code'] := 'P-100';
+_Row1.Properties['description'] := 'Pompa & filtro';
+_Row1.Properties['quantity'] := 2;
+
+_Row2 := TJSObject.new;
+_Row2.Properties['id'] := 102;
+_Row2.Properties['code'] := 'V-200';
+_Row2.Properties['description'] := 'Valvola <inox>';
+_Row2.Properties['quantity'] := 5;
+
+_Rows := TJSArray.new;
+_Rows.push(_Row1);
+_Rows.push(_Row2);
+
+_Data := TJSObject.new;
+_Data.Properties['rows'] := _Rows;
+```
+
+### 5.3 Caricamento e rendering in Pascal
+
+```pascal
+var
+  _Template : String;
+  _Data     : TJSObject;
+  _Rows     : TJSArray;
+  _Row1     : TJSObject;
+  _Row2     : TJSObject;
+  _Html     : String;
+begin
+  _Row1 := TJSObject.new;
+  _Row1.Properties['id'] := 101;
+  _Row1.Properties['code'] := 'P-100';
+  _Row1.Properties['description'] := 'Pompa & filtro';
+  _Row1.Properties['quantity'] := 2;
+
+  _Row2 := TJSObject.new;
+  _Row2.Properties['id'] := 102;
+  _Row2.Properties['code'] := 'V-200';
+  _Row2.Properties['description'] := 'Valvola <inox>';
+  _Row2.Properties['quantity'] := 5;
+
+  _Rows := TJSArray.new;
+  _Rows.push(_Row1);
+  _Rows.push(_Row2);
+
+  _Data := TJSObject.new;
+  _Data.Properties['rows'] := _Rows;
+
+  _Template := AWait(String, LoadTemplate('pages/products-table.html'));
+  _Html := TemplateEngine.RenderTemplate(_Template, _Data);
+  FOutputEl.innerHTML := _Html;
+end;
+```
+
+### 5.4 HTML risultante
+
+```html
+<table class="products">
+  <thead><tr><th>Codice</th><th>Descrizione</th><th>Quantità</th></tr></thead>
+  <tbody>
+    <tr data-id="101"><td>P-100</td><td>Pompa &amp; filtro</td><td>2</td></tr><tr data-id="102"><td>V-200</td><td>Valvola &lt;inox&gt;</td><td>5</td></tr>
+  </tbody>
+</table>
+```
+
+### 5.5 Corrispondenza fra dati e segnaposto
+
+- `{{#each rows}}` itera l'array `_Rows`.
+- Dentro il ciclo, ogni elemento è un `TJSObject` e diventa l'ambito corrente.
+- `{{id}}`, `{{code}}`, `{{description}}` e `{{quantity}}` leggono quindi le proprietà della riga corrente, non quelle dell'oggetto `_Data` esterno.
+- `{{id}}` si trova dentro l'attributo `data-id`, mentre gli altri valori sono testo delle celle. Il motore applica automaticamente l'escape adatto in entrambi i casi.
+
+---
+
+## 6. File con più sezioni e partial
+
+Obiettivo: conservare nello stesso file un template principale e un template riutilizzabile per ogni membro. Questo esempio usa un partial, ma non è ancora ricorsivo.
+
+### 6.1 File template HTML
+
+File `pages/team-sections.html` completo:
+
+```html
+<!-- @page -->
+<section class="team">
+  <h2>{{title}}</h2>
+  <div class="team-list">{{#each members}}{{> member}}{{else}}<p>Nessun membro</p>{{/each}}</div>
+</section>
+
+<!-- @member -->
+<article class="member" data-id="{{id}}">
+  <strong>{{name}}</strong>
+  <span>{{role}}</span>
+</article>
+```
+
+Le righe `<!-- @page -->` e `<!-- @member -->` dividono il file in due sezioni chiamate rispettivamente `page` e `member`. `LoadTemplateSections` restituisce un oggetto nel quale la proprietà `page` contiene il testo completo della prima sezione e la proprietà `member` contiene il testo completo della seconda.
+
+### 6.2 Dati da passare
+
+Struttura logica/JSON esatta:
+
+```json
+{
+  "title": "Team assistenza",
+  "members": [
+    {
+      "id": 7,
+      "name": "Anna Rossi",
+      "role": "Coordinatrice"
+    },
+    {
+      "id": 9,
+      "name": "Paolo Bianchi",
+      "role": "Tecnico"
+    }
+  ]
+}
+```
+
+Costruzione equivalente in Pascal:
+
+```pascal
+_Member1 := TJSObject.new;
+_Member1.Properties['id'] := 7;
+_Member1.Properties['name'] := 'Anna Rossi';
+_Member1.Properties['role'] := 'Coordinatrice';
+
+_Member2 := TJSObject.new;
+_Member2.Properties['id'] := 9;
+_Member2.Properties['name'] := 'Paolo Bianchi';
+_Member2.Properties['role'] := 'Tecnico';
+
+_Members := TJSArray.new;
+_Members.push(_Member1);
+_Members.push(_Member2);
+
+_Data := TJSObject.new;
+_Data.Properties['title'] := 'Team assistenza';
+_Data.Properties['members'] := _Members;
+```
+
+### 6.3 Caricamento e rendering in Pascal
+
+```pascal
+var
+  _Sections : TJSObject;
+  _Data     : TJSObject;
+  _Members  : TJSArray;
+  _Member1  : TJSObject;
+  _Member2  : TJSObject;
+  _Html     : String;
+begin
+  _Member1 := TJSObject.new;
+  _Member1.Properties['id'] := 7;
+  _Member1.Properties['name'] := 'Anna Rossi';
+  _Member1.Properties['role'] := 'Coordinatrice';
+
+  _Member2 := TJSObject.new;
+  _Member2.Properties['id'] := 9;
+  _Member2.Properties['name'] := 'Paolo Bianchi';
+  _Member2.Properties['role'] := 'Tecnico';
+
+  _Members := TJSArray.new;
+  _Members.push(_Member1);
+  _Members.push(_Member2);
+
+  _Data := TJSObject.new;
+  _Data.Properties['title'] := 'Team assistenza';
+  _Data.Properties['members'] := _Members;
+
+  _Sections := AWait(TJSObject,
+    LoadTemplateSections('pages/team-sections.html'));
+
+  _Html := TemplateEngine.RenderTemplateWithPartials(
+    String(_Sections.Properties['page']),
+    _Data,
+    _Sections);
+
+  FOutputEl.innerHTML := _Html;
+end;
+```
+
+### 6.4 HTML risultante
+
+```html
+<section class="team">
+  <h2>Team assistenza</h2>
+  <div class="team-list"><article class="member" data-id="7">
+  <strong>Anna Rossi</strong>
+  <span>Coordinatrice</span>
+</article><article class="member" data-id="9">
+  <strong>Paolo Bianchi</strong>
+  <span>Tecnico</span>
+</article></div>
+</section>
+```
+
+### 6.5 Corrispondenza fra dati e segnaposto
+
+- Il Pascal sceglie `page` come sezione iniziale con `_Sections.Properties['page']`.
+- Nel template `page`, `{{title}}` legge `_Data['title']` e `{{#each members}}` itera `_Data['members']`.
+- Durante ogni iterazione, `{{> member}}` renderizza la sezione `member` usando il membro corrente come ambito.
+- Di conseguenza, `{{id}}`, `{{name}}` e `{{role}}` leggono le proprietà del singolo membro.
+- Il terzo argomento di `RenderTemplateWithPartials` deve essere `_Sections`: è l'oggetto nel quale il motore cerca il partial chiamato `member`.
+
+---
+
+## 7. Albero ricorsivo
+
+Obiettivo: renderizzare un albero con un numero di livelli non noto in anticipo. La sezione `node` richiama sé stessa per ogni elemento dell'array `children`.
+
+### 7.1 File template HTML
+
+File `pages/category-tree.html` completo:
+
+```html
+<!-- @tree -->
+<ul class="tree">{{#each nodes}}{{> node}}{{/each}}</ul>
+
+<!-- @node -->
+<li>{{name}}{{#if children}}<ul>{{#each children}}{{> node}}{{/each}}</ul>{{/if}}</li>
+```
+
+`tree` è il punto di ingresso. `node` descrive un nodo e, quando `children` non è vuoto, usa di nuovo `{{> node}}` per ogni figlio.
+
+### 7.2 Dati da passare
+
+Struttura logica/JSON esatta:
 
 ```json
 {
   "nodes": [
     {
-      "name": "Radice",
+      "name": "Impianto",
       "children": [
         {
-          "name": "Ramo 1",
+          "name": "Pompe",
           "children": [
             {
-              "name": "Foglia"
+              "name": "Pompa A",
+              "children": []
             }
           ]
         },
         {
-          "name": "Ramo 2"
+          "name": "Valvole",
+          "children": []
         }
       ]
     }
@@ -566,90 +631,150 @@ Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
 }
 ```
 
-Frammenti:
-
-```json
-{
-  "node": "<li>{{name}}{{#if children}}<ul>{{#each children}}{{> node}}{{/each}}</ul>{{/if}}</li>"
-}
-```
-
-Risultato:
-
-```html
-<ul class="tree-root"><li>Radice<ul><li>Ramo 1<ul><li>Foglia</li></ul></li><li>Ramo 2</li></ul></li></ul>
-```
-
-### 9. `{{{ }}}`: HTML già pronto dell'applicazione, e perché `{{ }}` resta sicuro con i dati utente
-
-Modello:
-
-```html
-<div>{{{icon}}} {{label}}</div>
-```
-
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
-
-```json
-{
-  "icon": "<svg class=\"lock-icon\"></svg>",
-  "label": "<script>alert(1)</script>"
-}
-```
-
-Risultato:
-
-```html
-<div><svg class="lock-icon"></svg> &lt;script&gt;alert(1)&lt;/script&gt;</div>
-```
-
-### 10. `unless` (messaggio quando manca qualcosa)
-
-Modello:
-
-```html
-{{#unless email}}<span class="muted">email non indicata</span>{{else}}{{email}}{{/unless}}
-```
-
-Dati (in Pascal: `TJSObject` / `TJSArray` con le stesse chiavi):
-
-```json
-{
-  "email": ""
-}
-```
-
-Risultato:
-
-```html
-<span class="muted">email non indicata</span>
-```
-
-## Prima e dopo: cosa cambia nel progetto
-
-Prima, per un pulsante facoltativo serviva un segnaposto di classe calcolato in Pascal:
+Costruzione equivalente in Pascal:
 
 ```pascal
-Result.Properties['cancel_hidden'] := HiddenClass(not RowBool(aRow, 'can_cancel'));
-```
-```html
-<button class="admin-btn admin-btn-del {{cancel_hidden}}" data-action="cancel" data-uuid="{{uuid}}">Annulla</button>
+_PumpAChildren := TJSArray.new;
+_PumpA := TJSObject.new;
+_PumpA.Properties['name'] := 'Pompa A';
+_PumpA.Properties['children'] := _PumpAChildren;
+
+_PumpsChildren := TJSArray.new;
+_PumpsChildren.push(_PumpA);
+_Pumps := TJSObject.new;
+_Pumps.Properties['name'] := 'Pompe';
+_Pumps.Properties['children'] := _PumpsChildren;
+
+_ValvesChildren := TJSArray.new;
+_Valves := TJSObject.new;
+_Valves.Properties['name'] := 'Valvole';
+_Valves.Properties['children'] := _ValvesChildren;
+
+_PlantChildren := TJSArray.new;
+_PlantChildren.push(_Pumps);
+_PlantChildren.push(_Valves);
+_Plant := TJSObject.new;
+_Plant.Properties['name'] := 'Impianto';
+_Plant.Properties['children'] := _PlantChildren;
+
+_Nodes := TJSArray.new;
+_Nodes.push(_Plant);
+
+_Data := TJSObject.new;
+_Data.Properties['nodes'] := _Nodes;
 ```
 
-Con `#if`, il Pascal passa il dato e il modello decide cosa mostrare:
+### 7.3 Caricamento e rendering in Pascal
 
 ```pascal
-Result.Properties['can_cancel'] := RowBool(aRow, 'can_cancel');
+var
+  _Sections      : TJSObject;
+  _Data          : TJSObject;
+  _Nodes         : TJSArray;
+  _Plant         : TJSObject;
+  _PlantChildren : TJSArray;
+  _Pumps         : TJSObject;
+  _PumpsChildren : TJSArray;
+  _PumpA         : TJSObject;
+  _PumpAChildren : TJSArray;
+  _Valves         : TJSObject;
+  _ValvesChildren : TJSArray;
+  _Html          : String;
+begin
+  // Foglia "Pompa A": children è presente ma vuoto.
+  _PumpAChildren := TJSArray.new;
+  _PumpA := TJSObject.new;
+  _PumpA.Properties['name'] := 'Pompa A';
+  _PumpA.Properties['children'] := _PumpAChildren;
+
+  // Nodo "Pompe" con una foglia.
+  _PumpsChildren := TJSArray.new;
+  _PumpsChildren.push(_PumpA);
+  _Pumps := TJSObject.new;
+  _Pumps.Properties['name'] := 'Pompe';
+  _Pumps.Properties['children'] := _PumpsChildren;
+
+  // Foglia "Valvole".
+  _ValvesChildren := TJSArray.new;
+  _Valves := TJSObject.new;
+  _Valves.Properties['name'] := 'Valvole';
+  _Valves.Properties['children'] := _ValvesChildren;
+
+  // Radice "Impianto" con due figli.
+  _PlantChildren := TJSArray.new;
+  _PlantChildren.push(_Pumps);
+  _PlantChildren.push(_Valves);
+  _Plant := TJSObject.new;
+  _Plant.Properties['name'] := 'Impianto';
+  _Plant.Properties['children'] := _PlantChildren;
+
+  _Nodes := TJSArray.new;
+  _Nodes.push(_Plant);
+
+  _Data := TJSObject.new;
+  _Data.Properties['nodes'] := _Nodes;
+
+  _Sections := AWait(TJSObject,
+    LoadTemplateSections('pages/category-tree.html'));
+
+  _Html := TemplateEngine.RenderTemplateWithPartials(
+    String(_Sections.Properties['tree']),
+    _Data,
+    _Sections);
+
+  FOutputEl.innerHTML := _Html;
+end;
 ```
+
+### 7.4 HTML risultante
+
 ```html
-{{#if can_cancel}}<button class="admin-btn admin-btn-del" data-action="cancel" data-uuid="{{uuid}}">Annulla</button>{{/if}}
+<ul class="tree"><li>Impianto<ul><li>Pompe<ul><li>Pompa A</li></ul></li><li>Valvole</li></ul></li></ul>
 ```
 
-Vantaggi: il pulsante non sta nel DOM se non serve (niente elementi nascosti con `data-action`), il Pascal non conosce
-le classi CSS e il modello dice cosa compare davvero.
+### 7.5 Corrispondenza fra dati e segnaposto
 
-## Verifica
+- `{{#each nodes}}` parte dall'array delle radici `_Data['nodes']`.
+- `{{> node}}` renderizza il partial `node` sul nodo corrente.
+- Nel partial, `{{name}}` legge il nome del nodo corrente.
+- `{{#if children}}` è vero soltanto se `children` è un array non vuoto.
+- `{{#each children}}` sposta l'ambito su ogni figlio e il successivo `{{> node}}` richiama lo stesso partial. È questo richiamo che realizza la ricorsione.
+- Ogni foglia contiene `children: []`: l'array vuoto rende falso `{{#if children}}` e interrompe naturalmente quel ramo.
+- Come nell'esempio precedente, `_Sections` deve essere passato come terzo argomento; senza i partial, `{{> node}}` non produrrebbe contenuto.
 
-`tests/TemplateEngine/test.js` e' una copia 1:1 dell'algoritmo in JavaScript con i casi di prova
-(`node tests/TemplateEngine/test.js`). Passando una o piu' cartelle di modelli (`node test.js cartella/pages`) confronta anche il motore nuovo con il vecchio sui modelli esistenti, scritti per la versione precedente,
-diano lo stesso risultato.
+Il motore tronca un ramo oltre 32 livelli complessivi di blocchi e partial. Questa protezione evita una ricorsione infinita se un partial richiama sé stesso senza attraversare un array che prima o poi termina.
+
+---
+
+## Ambiti nei cicli
+
+Dentro `{{#each elenco}}`, i nomi vengono cercati soltanto nell'elemento corrente. Per leggere una proprietà del livello esterno si usa `../`.
+
+Per esempio, se l'oggetto esterno contiene `title` e ogni elemento corrente contiene `name`, dentro il ciclo si usano `{{name}}` per l'elemento e `{{../title}}` per il dato esterno. Nei cicli annidati si può usare `../../title` per risalire di due livelli.
+
+Questa regola spiega perché, negli esempi della tabella e dei partial, `{{id}}` e `{{name}}` si riferiscono alla riga o al membro corrente e non all'oggetto radice.
+
+## Valori con e senza escape
+
+Usare normalmente `{{campo}}`. Il motore protegge `&`, `<`, `>`, virgolette e apici; nel testo converte inoltre gli a-capo secondo `TextToHTML`.
+
+Usare `{{{campo}}}` soltanto quando il valore è HTML creato e controllato dall'applicazione. Non usarlo per testo ricevuto dall'utente o dal server: il contenuto verrebbe inserito come markup senza protezione.
+
+## Caricamento e cache
+
+- `LoadTemplate(path)` restituisce il testo completo di un file e lo mette in cache per percorso.
+- `LoadTemplateSections(path)` carica il file, lo divide in corrispondenza di `<!-- @nome -->` e restituisce un `TJSObject` del tipo `nome -> testo della sezione`.
+- Il testo che precede la prima marca `<!-- @nome -->` viene ignorato.
+- I nomi di sezione possono contenere lettere, numeri, `_` e `-`.
+- Se il caricamento fallisce, le funzioni restituiscono rispettivamente una stringa vuota o un oggetto vuoto e non memorizzano l'insuccesso in cache.
+- `ClearTemplateCache` forza il ricaricamento dei template alle chiamate successive.
+
+## Errori frequenti
+
+1. **Inserire il template nel DOM prima del rendering.** Un template con `data-id="{{id}}"` deve essere letto come testo; il browser potrebbe deformare i segnaposto se analizza prima l'HTML.
+2. **Passare testo già codificato.** Inserire `TextToHTML(Value)` nei dati causa doppio escape. Passare `Value` così com'è.
+3. **Passare `'false'` invece di `False`.** La stringa non vuota `'false'` è vera per `#if`; usare un booleano reale.
+4. **Cercare il dato nell'ambito sbagliato.** Dentro `#each`, usare i campi dell'elemento corrente oppure `../campo` per risalire.
+5. **Dimenticare il terzo argomento.** I template con `{{> nome}}` richiedono `RenderTemplateWithPartials(..., _Sections)`.
+6. **Usare un nome diverso.** `{{> member}}` cerca esattamente la sezione `<!-- @member -->`; i due nomi devono coincidere.
+7. **Creare una ricorsione che non termina.** Un partial ricorsivo deve procedere verso array di figli sempre più piccoli, fino a un array vuoto.
